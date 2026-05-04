@@ -9,8 +9,6 @@
         extends uvm_component
         implements uvm_ext_reset_handler;
 
-        `uvm_component_utils(cfs_algn_model)
-
         // Register Model
         cfs_algn_reg_block reg_block;
 
@@ -28,6 +26,12 @@
         // Intertupt request port
         uvm_analysis_port#(bit) port_out_irq;
 
+        // Rx FIFO handler
+        uvm_tlm_fifo#(cfs_md_item_mon) rx_fifo;
+        local process process_push_to_rx_fifo;
+
+        `uvm_component_utils(cfs_algn_model)
+
         function new(string name = "", uvm_component parent);
             super.new(name, parent);
 
@@ -38,6 +42,8 @@
             port_out_tx = new("port_out_tx", this);
 
             port_out_irq = new("port_out_irq", this);
+
+            rx_fifo = new("rx_fifo", this, 8);
         endfunction
 
         virtual function void build_phase(uvm_phase phase);
@@ -74,6 +80,10 @@
 
         virtual function void handle_reset(uvm_phase phase);
             reg_block.reset("HARD");
+
+            this.kill_process(process_push_to_rx_fifo);
+
+            rx_fifo.flush();
         endfunction
 
         virtual function void write_in_rx(cfs_md_item_mon item_mon);
@@ -88,11 +98,11 @@
             case (response) 
 
                 CFS_MD_OKAY: begin
-                    // TODO: Fill in                   
+                    push_to_rx_fifo_nb(item_mon);                
                 end
 
                 CFS_MD_ERR: begin
-                    this.increment_count_drop(response);
+                    this.inc_count_drop(response);
                     port_out_rx.write(response);
                 end
 
@@ -145,7 +155,7 @@
 
             `uvm_info("DEBUG", $sformatf(
                 "Drop counter reached max value - %0s: %0d",
-                reg_block.IRQEN.get_full_name(), 
+                reg_block.IRQEN.MAX_DROP.get_full_name(), 
                 reg_block.STATUS.CNT_DROP.get_mirrored_value()
                 ),
                 UVM_NONE
@@ -156,7 +166,7 @@
             end
         endfunction
 
-        protected virtual function void increment_count_drop(cfs_md_response response);
+        protected virtual function void inc_count_drop(cfs_md_response response);
 
             uvm_reg_data_t max_value = ('h1 << reg_block.STATUS.CNT_DROP.get_n_bits()) - 1; 
 
@@ -186,6 +196,74 @@
             end
 
         endfunction
+
+        // ----------------------------------- RX FIFO -----------------------------------
+        virtual function void kill_process(ref process p);
+            if (p != null) begin
+                p.kill();
+
+                p = null;
+            end
+
+        endfunction
+
+        protected virtual function void set_rx_fifo_full();
+            void'(reg_block.IRQ.RX_FIFO_FULL.predict(1));
+
+            `uvm_info("DEBUG", $sformatf(
+                "RX FIFO is full - %0s: %0d",
+                reg_block.IRQEN.RX_FIFO_FULL.get_full_name(), 
+                reg_block.STATUS.RX_LVL.get_mirrored_value()
+                ),
+                UVM_NONE
+            )
+
+            if (reg_block.IRQEN.RX_FIFO_FULL.get_mirrored_value() == 1) begin
+                port_out_irq.write(1);
+            end
+        endfunction
+
+        protected virtual function void inc_rx_lvl();
+            int current_value = reg_block.STATUS.RX_LVL.get_mirrored_value();
+            void'(reg_block.STATUS.RX_LVL.predict(current_value + 1));
+
+            if (reg_block.STATUS.RX_LVL.get_mirrored_value() == rx_fifo.size()) begin
+                set_rx_fifo_full();
+            end
+        endfunction
+
+        protected virtual task push_to_rx_fifo(cfs_md_item_mon item_mon);
+            rx_fifo.put(item_mon);
+
+            inc_rx_lvl();
+
+            `uvm_info("DEBUG", $sformatf(
+                "Rx Fifo push - new_level: %d, pushed_entry: %0s",
+                reg_block.STATUS.RX_LVL.get_mirrored_value(),
+                item_mon.convert2string()),
+                UVM_NONE 
+            )
+
+            port_out_rx.write(CFS_MD_OKAY);
+        endtask
+
+        // nb means Non-Blocking
+        local virtual function void push_to_rx_fifo_nb(cfs_md_item_mon item);
+            if (process_push_to_rx_fifo != null) begin
+                `uvm_fatal("ALGORITHM_ISSUE", 
+                    "Cannot start two instances of \"push_to_rx_fifo()\" task")
+            end
+
+            fork 
+                begin 
+                    process_push_to_rx_fifo = process::self();
+
+                    push_to_rx_fifo(item);
+
+                    process_push_to_rx_fifo = null;
+                end 
+            join_none
+        endfunction 
 
     endclass
 
