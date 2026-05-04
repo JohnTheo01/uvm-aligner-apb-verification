@@ -47,6 +47,19 @@
                 seq_simple.start(env.md_rx_agent.sequencer);
             end
 
+            repeat(2) begin 
+                cfs_md_sequence_simple_master seq_simple = cfs_md_sequence_simple_master::type_id::create("seq_simple");
+
+                seq_simple.set_sequencer(env.md_rx_agent.sequencer);
+                
+                void'(seq_simple.randomize() with {
+                    item.data.size() == 4;
+                    item.offset == 0;
+                });
+
+                seq_simple.start(env.md_rx_agent.sequencer);
+            end
+
             // repeat(20) begin 
             //     cfs_md_sequence_simple_master seq_simple = cfs_md_sequence_simple_master::type_id::create("seq_simple");
 
