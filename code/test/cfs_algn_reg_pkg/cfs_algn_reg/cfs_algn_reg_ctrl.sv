@@ -66,7 +66,7 @@
                 .parent(this),
                 .size(1),
                 .lsb_pos(16),
-                .access("RO"),
+                .access("WO"),
                 .volatile(0),
                 .reset(1'b0),
                 .has_reset(1), 
