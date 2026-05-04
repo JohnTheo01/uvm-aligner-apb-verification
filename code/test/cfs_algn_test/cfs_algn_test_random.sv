@@ -11,7 +11,8 @@
             super.new(name, parent);
         endfunction
 
-         virtual task run_phase(uvm_phase phase);
+        virtual task run_phase(uvm_phase phase);
+            uvm_status_e status;
     
             phase.raise_objection(this, "TEST_DONE");
 
@@ -29,17 +30,34 @@
                 end
             join_none
 
-            repeat(20) begin 
+            env.model.reg_block.CTRL.OFFSET.set(1);
+            env.model.reg_block.CTRL.SIZE.set(1);
+            env.model.reg_block.CTRL.update(status);
+
+            repeat(2) begin 
                 cfs_md_sequence_simple_master seq_simple = cfs_md_sequence_simple_master::type_id::create("seq_simple");
 
                 seq_simple.set_sequencer(env.md_rx_agent.sequencer);
                 
                 void'(seq_simple.randomize() with {
-                   
+                    item.data.size() == 3;
+                    item.offset == 0;
                 });
 
                 seq_simple.start(env.md_rx_agent.sequencer);
             end
+
+            // repeat(20) begin 
+            //     cfs_md_sequence_simple_master seq_simple = cfs_md_sequence_simple_master::type_id::create("seq_simple");
+
+            //     seq_simple.set_sequencer(env.md_rx_agent.sequencer);
+                
+            //     void'(seq_simple.randomize() with {
+                   
+            //     });
+
+            //     seq_simple.start(env.md_rx_agent.sequencer);
+            // end
             
             #(100ns);
 
