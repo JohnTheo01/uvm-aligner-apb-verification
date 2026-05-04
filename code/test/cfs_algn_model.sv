@@ -77,12 +77,34 @@
         endfunction
 
         virtual function void write_in_rx(cfs_md_item_mon item_mon);
-            `uvm_info("DEBUG", $sformatf(
-                "Model received information from the RX agent: %0s", 
-                item_mon.convert2string()
-                ),
-                UVM_NONE
-            )
+            cfs_md_response response;
+
+            if (item_mon.is_active() == 0) begin
+                return;
+            end
+
+            response = this.get_exp_response(item_mon);
+
+            case (response) 
+
+                CFS_MD_OKAY: begin
+                    // TODO: Fill in                   
+                end
+
+                CFS_MD_ERR: begin
+                    this.increment_count_drop(response);
+                    port_out_rx.write(response);
+                end
+
+                default: begin
+                    `uvm_fatal("ALGORITHM_ISSUE", 
+                        $sformatf("Unsupported value for response: %0s", response.name())
+                    )
+                end
+
+            endcase
+
+
         endfunction
 
         virtual function void write_in_tx(cfs_md_item_mon item_mon);
@@ -92,6 +114,77 @@
                 ),
                 UVM_NONE
             )
+        endfunction
+
+        protected virtual function cfs_md_response get_exp_response(cfs_md_item_mon item_mon);
+
+            int unsigned data_width = env_config.get_algn_data_width();
+            
+            int size    = item_mon.data.size();
+            int offset  = item_mon.offset;
+
+            if (size == 0) begin
+                return CFS_MD_ERR;
+            end
+
+            if ( ((data_width / 8) + offset) % size != 0 ) begin
+                return CFS_MD_ERR;
+            end 
+
+            if ( offset + size > (data_width / 8) ) begin
+                return CFS_MD_ERR;
+            end
+                
+            return CFS_MD_OKAY;
+        
+        endfunction
+
+        protected virtual function void set_max_drop();
+            
+            void'(reg_block.IRQ.MAX_DROP.predict(1));
+
+            `uvm_info("DEBUG", $sformatf(
+                "Drop counter reached max value - %0s: %0d",
+                reg_block.IRQEN.get_full_name(), 
+                reg_block.STATUS.CNT_DROP.get_mirrored_value()
+                ),
+                UVM_NONE
+            )
+
+            if (reg_block.IRQEN.MAX_DROP.get_mirrored_value() == 1) begin
+                port_out_irq.write(1);
+            end
+        endfunction
+
+        protected virtual function void increment_count_drop(cfs_md_response response);
+
+            uvm_reg_data_t max_value = ('h1 << reg_block.STATUS.CNT_DROP.get_n_bits()) - 1; 
+
+            if (response == CFS_MD_OKAY) begin
+                return;
+            end
+
+            if (reg_block.STATUS.CNT_DROP.get_mirrored_value() == max_value) begin
+                this.set_max_drop();
+                return;
+            end
+
+            begin
+                uvm_reg_data_t current_value = reg_block.STATUS.CNT_DROP.get_mirrored_value();
+
+                void'(reg_block.STATUS.CNT_DROP.predict(current_value + 1));
+
+                `uvm_info("DEBUG", 
+                    $sformatf(
+                        "Increment - %0s: %0d due to %0s",
+                        reg_block.STATUS.CNT_DROP.get_full_name(),
+                        reg_block.STATUS.CNT_DROP.get_mirrored_value(),
+                        response.name()),
+                    UVM_NONE
+
+                )
+            end
+
         endfunction
 
     endclass
