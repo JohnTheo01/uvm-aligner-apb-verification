@@ -79,6 +79,10 @@
 
 			model.env_config = env_config;
 
+			// Connect input analysis ports for model
+			md_rx_agent.monitor.output_port.connect(model.port_in_rx);
+			md_tx_agent.monitor.output_port.connect(model.port_in_tx);
+
 		endfunction
 
 		virtual task run_phase(uvm_phase phase);
