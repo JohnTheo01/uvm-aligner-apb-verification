@@ -35,28 +35,29 @@
             join_none
 
 
-            begin
-                cfs_algn_seq_reg_config seq = cfs_algn_seq_reg_config::type_id::create("seq");
-
-                seq.reg_block = env.model.reg_block;
-
-                seq.start(env.model.reg_block.default_map.get_sequencer());
-
-
-            end
-
             repeat(2) begin 
                 cfs_md_sequence_simple_master seq_simple = cfs_md_sequence_simple_master::type_id::create("seq_simple");
 
                 seq_simple.set_sequencer(env.md_rx_agent.sequencer);
                 
                 void'(seq_simple.randomize() with {
-                   item.data.size() == 4;
+                   item.data.size() == 3;
                    item.offset      == 0;
                 });
 
                 seq_simple.start(env.md_rx_agent.sequencer);
             end
+
+            // Temporary as we have not implemented it in the model
+            void'(env.model.reg_block.STATUS.CNT_DROP.predict(2));
+            env.model.reg_block.STATUS.read(status, data);
+
+
+            env.model.reg_block.CTRL.CLR.set(1);
+            env.model.reg_block.CTRL.update(status);
+
+
+            env.model.reg_block.STATUS.read(status, data);
 
             #(100ns);
 
