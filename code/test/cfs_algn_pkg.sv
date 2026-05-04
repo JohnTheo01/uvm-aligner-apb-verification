@@ -23,6 +23,9 @@
 
     `include "cfs_algn_env_config.sv"
 
+    `include "cfs_algn_clr_cnt_drop.sv"
+
+
     `include "cfs_algn_reg_predictor.sv"
 
     `include "cfs_algn_model.sv"
@@ -31,6 +34,8 @@
     `include "cfs_algn_env.sv"
 
     `include "cfs_algn_seq_reg_config.sv"
+  
   endpackage
+
 
 `endif

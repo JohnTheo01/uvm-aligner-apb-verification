@@ -28,6 +28,21 @@
             end
         endfunction
 
+        virtual function void connect_phase(uvm_phase phase);
+            super.connect_phase(phase);
+
+            begin 
+                cfs_algn_clr_cnt_drop cbs = cfs_algn_clr_cnt_drop::type_id::create("cbs", this);
+
+                cbs.cnt_drop = reg_block.STATUS.CNT_DROP;
+
+                uvm_callbacks#(uvm_reg_field, cfs_algn_clr_cnt_drop)::add(
+                    reg_block.CTRL.CLR, 
+                    cbs
+                );
+            end
+        endfunction
+
         virtual function void end_of_elaboration_phase(uvm_phase phase);
             super.end_of_elaboration_phase(phase);
 
