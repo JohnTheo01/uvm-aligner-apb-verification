@@ -9,6 +9,8 @@
 
         local int unsigned algn_data_width;
 
+        protected cfs_algn_vif vif;
+
         `uvm_component_utils(cfs_algn_env_config)
 
         function new(string name = "", uvm_component parent);
@@ -39,6 +41,30 @@
             this.algn_data_width = value;
         endfunction
 
+        virtual function void set_vif(cfs_algn_vif value);
+            if (this.vif == null) begin
+                this.vif = value;
+                return;
+            end
+
+            `uvm_fatal("ALGORITHM_ISSUE", "Trying to set the virtual interface more than once")
+
+        endfunction
+
+        virtual function cfs_algn_vif get_vif();
+            return this.vif;
+        endfunction
+
+        virtual function void start_of_simulation_phase(uvm_phase phase);
+            super.start_of_simulation_phase(phase);
+            
+            if (this.vif == null) begin
+                `uvm_fatal("ALGORITHM_ISSUE", "Virtual Interface has not been instantiated in \"start_of_simulation_phase\" phase")
+            end else begin
+                `uvm_info("DEBUG", "Virtual Interface has been instantiated in \"start_of_simulation_phase\" phase", UVM_DEBUG)
+            end
+
+        endfunction
 
     endclass
 

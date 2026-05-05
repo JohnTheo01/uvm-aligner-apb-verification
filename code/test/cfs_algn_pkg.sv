@@ -10,6 +10,8 @@
 
   `include "cfs_algn_reg_pkg.sv"
 
+  `include "cfs_algn_if.sv"
+
   package cfs_algn_pkg;
     import uvm_pkg::*;
     
@@ -18,6 +20,8 @@
     import cfs_md_pkg::*;
 
     import cfs_algn_reg_pkg::*;
+
+    `include "cfs_algn_types.sv"
 
     `include "cfs_algn_reg_access_status_info.sv"
 
