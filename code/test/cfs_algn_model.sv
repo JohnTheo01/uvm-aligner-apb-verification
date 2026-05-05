@@ -27,8 +27,12 @@
         uvm_analysis_port#(bit) port_out_irq;
 
         // Rx FIFO handler
-        uvm_tlm_fifo#(cfs_md_item_mon) rx_fifo;
+        protected uvm_tlm_fifo#(cfs_md_item_mon) rx_fifo;
         local process process_push_to_rx_fifo;
+
+        // Buffer handler
+        protected cfs_md_item_mon buffer[$];
+        local process process_build_buffer;
 
         `uvm_component_utils(cfs_algn_model)
 
@@ -78,12 +82,17 @@
             reg_block.CTRL.set_algn_data_width(env_config.get_algn_data_width());
         endfunction
 
+        // ----------------------------------- Reset Logic -----------------------------------
         virtual function void handle_reset(uvm_phase phase);
             reg_block.reset("HARD");
 
             this.kill_process(process_push_to_rx_fifo);
+            this.kill_process(process_build_buffer);
 
             rx_fifo.flush();
+            buffer = {};
+
+            build_buffer_nb();
         endfunction
 
         virtual function void write_in_rx(cfs_md_item_mon item_mon);
@@ -197,8 +206,7 @@
 
         endfunction
 
-        // ----------------------------------- RX FIFO -----------------------------------
-        virtual function void kill_process(ref process p);
+         virtual function void kill_process(ref process p);
             if (p != null) begin
                 p.kill();
 
@@ -206,6 +214,9 @@
             end
 
         endfunction
+
+        // ----------------------------------- RX FIFO -----------------------------------
+       
 
         protected virtual function void set_rx_fifo_full();
             void'(reg_block.IRQ.RX_FIFO_FULL.predict(1));
@@ -264,6 +275,84 @@
                 end 
             join_none
         endfunction 
+
+        // ----------------------------------- BUFFER LOGIC -----------------------------------
+        
+        protected virtual function void set_rx_fifo_empty();
+            void'(reg_block.IRQ.RX_FIFO_EMPTY.predict(1));
+
+            `uvm_info("DEBUG", $sformatf(
+                "RX FIFO is empty - %0s: %0d",
+                reg_block.IRQEN.RX_FIFO_EMPTY.get_full_name(), 
+                reg_block.STATUS.RX_LVL.get_mirrored_value()
+                ),
+                UVM_NONE
+            )
+
+            if (reg_block.IRQEN.RX_FIFO_EMPTY.get_mirrored_value() == 1) begin
+                port_out_irq.write(1);
+            end
+        endfunction
+
+        protected virtual function void dec_rx_lvl();
+            int current_value = reg_block.STATUS.RX_LVL.get_mirrored_value();
+            
+            void'(reg_block.STATUS.RX_LVL.predict(current_value - 1));
+
+            if (reg_block.STATUS.RX_LVL.get_mirrored_value() == 0) begin
+                set_rx_fifo_empty();
+            end
+
+        endfunction
+
+        protected virtual task pop_from_rx_fifo(ref cfs_md_item_mon item);
+             rx_fifo.get(item);
+
+            dec_rx_lvl();
+
+            `uvm_info("DEBUG", $sformatf(
+                "Rx Fifo pop - new_level: %d, popped_entry: %0s",
+                reg_block.STATUS.RX_LVL.get_mirrored_value(),
+                item.convert2string()),
+                UVM_NONE 
+            )
+
+        endtask
+
+        protected virtual task build_buffer();
+            cfs_algn_vif vif = env_config.get_vif();
+
+            forever begin
+                int ctrl_size = reg_block.CTRL.SIZE.get_mirrored_value();
+
+                if((buffer.sum() with (item.data.size())) <= ctrl_size) begin
+                    cfs_md_item_mon rx_item;
+
+                    pop_from_rx_fifo(rx_item);
+
+                    buffer.push_back(rx_item);
+                end else begin
+                    @(posedge vif.clk);
+                end
+            end
+        endtask
+
+        protected virtual function void build_buffer_nb();
+            if (process_build_buffer != null) begin
+                `uvm_fatal("ALGORITHM_ISSUE", 
+                    "Cannot start two instances of \"build_buffer()\" task")
+            end
+
+            fork 
+                begin 
+                    process_build_buffer = process::self();
+
+                    build_buffer();
+
+                    process_build_buffer = null;
+                end 
+            join_none
+        endfunction
 
     endclass
 
