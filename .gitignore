@@ -16,6 +16,7 @@ novas.rc
 *~
 .DS_Store
 __pycache__/
+tasks.json
 
 # Compiled/generated
 *.o
