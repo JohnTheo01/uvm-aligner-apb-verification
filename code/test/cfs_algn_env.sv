@@ -63,6 +63,17 @@
 		virtual function void connect_phase(uvm_phase phase);
 			cfs_apb_reg_adapter adapter;
 			
+			cfs_algn_vif vif;
+			string vif_name = "vif";
+
+			if(!uvm_config_db#(cfs_algn_vif)::get(this, "", vif_name, vif)) begin 
+				`uvm_fatal("NO_VIF", 
+					$sformatf("Could not get VIF from database with name: \"%0s\"", vif_name)
+				)
+			end else begin
+				env_config.set_vif(vif);
+			end
+
 			super.connect_phase(phase);
 
 			adapter = cfs_apb_reg_adapter::type_id::create(
@@ -82,6 +93,8 @@
 			// Connect input analysis ports for model
 			md_rx_agent.monitor.output_port.connect(model.port_in_rx);
 			md_tx_agent.monitor.output_port.connect(model.port_in_tx);
+
+
 
 		endfunction
 
