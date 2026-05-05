@@ -30,8 +30,8 @@
                 end
             join_none
 
-            env.model.reg_block.CTRL.OFFSET.set(1);
-            env.model.reg_block.CTRL.SIZE.set(1);
+            env.model.reg_block.CTRL.OFFSET.set(0);
+            env.model.reg_block.CTRL.SIZE.set(4);
             env.model.reg_block.CTRL.update(status);
 
             repeat(2) begin 
@@ -53,7 +53,7 @@
                 seq_simple.set_sequencer(env.md_rx_agent.sequencer);
                 
                 void'(seq_simple.randomize() with {
-                    item.data.size() == 4;
+                    item.data.size() == 2;
                     item.offset == 0;
                 });
 
