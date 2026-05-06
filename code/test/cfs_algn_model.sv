@@ -40,6 +40,11 @@
         // Align process pointer
         local process process_align;
 
+        // Event for tx acknowledgement
+        protected uvm_event tx_complete;
+
+        local process process_tx_ctrl;
+
         `uvm_component_utils(cfs_algn_model)
 
         function new(string name = "", uvm_component parent);
@@ -55,6 +60,8 @@
 
             rx_fifo = new("rx_fifo", this, 8);
             tx_fifo = new("tx_fifo", this, 8);
+
+            tx_complete = new("tx_complete");
         endfunction
 
         virtual function void build_phase(uvm_phase phase);
@@ -96,13 +103,17 @@
             this.kill_process(process_push_to_rx_fifo);
             this.kill_process(process_build_buffer);
             this.kill_process(process_align);
+            this.kill_process(process_tx_ctrl);
 
             rx_fifo.flush();
             tx_fifo.flush();
             buffer = {};
 
+            tx_complete.reset();
+
             build_buffer_nb();
             align_nb();
+            tx_ctrl_nb();
         endfunction
 
         virtual function void write_in_rx(cfs_md_item_mon item_mon);
@@ -137,12 +148,9 @@
         endfunction
 
         virtual function void write_in_tx(cfs_md_item_mon item_mon);
-            `uvm_info("DEBUG", $sformatf(
-                "Model received information from the TX agent: %0s", 
-                item_mon.convert2string()
-                ),
-                UVM_NONE
-            )
+            if(item_mon.is_active() == 0) begin
+                tx_complete.trigger();
+            end
         endfunction
 
         protected virtual function cfs_md_response get_exp_response(cfs_md_item_mon item_mon);
@@ -165,7 +173,6 @@
             end
                 
             return CFS_MD_OKAY;
-        
         endfunction
 
         protected virtual function void set_max_drop();
@@ -213,7 +220,6 @@
 
                 )
             end
-
         endfunction
 
          virtual function void kill_process(ref process p);
@@ -222,7 +228,6 @@
 
                 p = null;
             end
-
         endfunction
 
         // ----------------------------------- RX FIFO -----------------------------------
@@ -316,7 +321,7 @@
         endfunction
 
         protected virtual task pop_from_rx_fifo(ref cfs_md_item_mon item);
-             rx_fifo.get(item);
+            rx_fifo.get(item);
 
             dec_rx_lvl();
 
@@ -528,7 +533,76 @@
             join_none
         endfunction
         
+        // ----------------------------------- TX Contrloller -----------------------------------
+        protected virtual function void set_tx_fifo_empty();
+            void'(reg_block.IRQ.TX_FIFO_EMPTY.predict(1));
 
+            `uvm_info("DEBUG", $sformatf(
+                "TX FIFO is EMPTY - %0s: %0d",
+                reg_block.IRQEN.TX_FIFO_EMPTY.get_full_name(), 
+                reg_block.STATUS.TX_LVL.get_mirrored_value()
+                ),
+                UVM_NONE
+            )
+
+            if (reg_block.IRQEN.TX_FIFO_EMPTY.get_mirrored_value() == 1) begin
+                port_out_irq.write(1);
+            end
+        endfunction
+
+        protected virtual function void dec_tx_lvl();
+            int current_value = reg_block.STATUS.TX_LVL.get_mirrored_value();
+            
+            void'(reg_block.STATUS.TX_LVL.predict(current_value - 1));
+
+            if (reg_block.STATUS.TX_LVL.get_mirrored_value() == 0) begin
+                set_tx_fifo_empty();
+            end
+        endfunction
+
+        protected virtual task  pop_from_tx_fifo(ref cfs_md_item_mon item);
+            tx_fifo.get(item);
+
+            dec_tx_lvl();
+
+            `uvm_info("DEBUG", $sformatf(
+                "Tx Fifo pop - new_level: %d, popped_entry: %0s",
+                reg_block.STATUS.TX_LVL.get_mirrored_value(),
+                item.convert2string()),
+                UVM_NONE 
+            )
+        endtask
+
+        protected virtual task tx_ctrl();
+            cfs_md_item_mon item;
+            
+            forever begin
+
+                pop_from_tx_fifo(item);
+
+                port_out_tx.write(item);
+
+                tx_complete.wait_trigger();
+                
+            end
+        endtask
+
+        local virtual function void tx_ctrl_nb();
+            if (process_align != null) begin
+                `uvm_fatal("ALGORITHM_ISSUE", 
+                    "Cannot start two instances of \"tx_ctrl()\" task")
+            end
+
+            fork 
+                begin 
+                    process_tx_ctrl = process::self();
+
+                    tx_ctrl();
+
+                    process_tx_ctrl = null;
+                end 
+            join_none
+        endfunction
     endclass
 
 `endif
