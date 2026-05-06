@@ -34,6 +34,12 @@
         protected cfs_md_item_mon buffer[$];
         local process process_build_buffer;
 
+        // TX FIFO handler
+        protected uvm_tlm_fifo#(cfs_md_item_mon) tx_fifo;
+
+        // Align process pointer
+        local process process_align;
+
         `uvm_component_utils(cfs_algn_model)
 
         function new(string name = "", uvm_component parent);
@@ -48,6 +54,7 @@
             port_out_irq = new("port_out_irq", this);
 
             rx_fifo = new("rx_fifo", this, 8);
+            tx_fifo = new("tx_fifo", this, 8);
         endfunction
 
         virtual function void build_phase(uvm_phase phase);
@@ -88,11 +95,14 @@
 
             this.kill_process(process_push_to_rx_fifo);
             this.kill_process(process_build_buffer);
+            this.kill_process(process_align);
 
             rx_fifo.flush();
+            tx_fifo.flush();
             buffer = {};
 
             build_buffer_nb();
+            align_nb();
         endfunction
 
         virtual function void write_in_rx(cfs_md_item_mon item_mon);
@@ -337,7 +347,7 @@
             end
         endtask
 
-        protected virtual function void build_buffer_nb();
+        local virtual function void build_buffer_nb();
             if (process_build_buffer != null) begin
                 `uvm_fatal("ALGORITHM_ISSUE", 
                     "Cannot start two instances of \"build_buffer()\" task")
@@ -353,6 +363,171 @@
                 end 
             join_none
         endfunction
+
+        // ----------------------------------- ALIGN -----------------------------------
+        protected virtual function void set_tx_fifo_full();
+            void'(reg_block.IRQ.TX_FIFO_FULL.predict(1));
+
+            `uvm_info("DEBUG", $sformatf(
+                "TX FIFO is FULL - %0s: %0d",
+                reg_block.IRQEN.TX_FIFO_FULL.get_full_name(), 
+                reg_block.STATUS.TX_LVL.get_mirrored_value()
+                ),
+                UVM_NONE
+            )
+
+            if (reg_block.IRQEN.TX_FIFO_FULL.get_mirrored_value() == 1) begin
+                port_out_irq.write(1);
+            end
+        endfunction
+
+        protected virtual function void inc_tx_lvl();
+            int current_value = reg_block.STATUS.TX_LVL.get_mirrored_value();
+            
+            void'(reg_block.STATUS.TX_LVL.predict(current_value + 1));
+
+            if (reg_block.STATUS.TX_LVL.get_mirrored_value() == tx_fifo.size()) begin
+                set_tx_fifo_full();
+            end
+        endfunction
+
+        protected virtual task push_to_tx_fifo(cfs_md_item_mon item);
+            tx_fifo.put(item);
+
+            inc_tx_lvl();
+
+            `uvm_info("DEBUG", $sformatf(
+                "Tx Fifo push - new_level: %d, pushed_entry: %0s",
+                reg_block.STATUS.TX_LVL.get_mirrored_value(),
+                item.convert2string()),
+                UVM_NONE 
+            )
+
+            // port_out_rx.write(CFS_MD_OKAY);
+        endtask
+
+        protected virtual function void split(int unsigned num_bytes, cfs_md_item_mon item, ref cfs_md_item_mon items[$]);
+            if (num_bytes >= item.data.size()) begin
+                `uvm_fatal("ALGORITHM_ISSUE", 
+                    $sformatf("num_bytes - %0d cannot be greater or equal to number of bytes in item data - %0d",
+                        num_bytes, item.data.size()))
+                return;
+            end
+
+            if (num_bytes == 0) begin
+                `uvm_fatal("ALGORITHM_ISSUE", "\"num_bytes\" cannot be 0")
+                return;
+            end
+
+            for (int i = 0; i < 2; i++) begin
+                cfs_md_item_mon splitted_item = cfs_md_item_mon::type_id::create("splitted_item", this);
+
+                if (i == 0) begin
+                    splitted_item.offset = item.offset;
+
+                    for (int j = 0; j < num_bytes; j++) begin
+                        splitted_item.data.push_back(item.data[j]);
+                    end
+                end else begin
+                    splitted_item.offset = item.offset + num_bytes; 
+
+                    for (int j = num_bytes; j < item.data.size(); j++) begin
+                        splitted_item.data.push_back(item.data[j]);
+                    end
+                end
+
+                splitted_item.prev_item_delay   = item.prev_item_delay;
+                splitted_item.length            = item.length;
+                splitted_item.response          = item.response;
+
+                void'(splitted_item.begin_tr(item.get_begin_time()));
+
+                if(!(item.is_active())) begin
+                    splitted_item.end_tr(item.get_end_time());
+                end
+
+                items.push_back(splitted_item);
+
+            end
+
+        endfunction
+
+        protected virtual task align();
+            cfs_algn_vif vif = env_config.get_vif();
+
+            forever begin
+                int unsigned ctrl_size  = reg_block.CTRL.SIZE.get_mirrored_value();
+                int unsigned ctrl_offset = reg_block.CTRL.OFFSET.get_mirrored_value();
+
+                uvm_wait_for_nba_region();
+
+                if(ctrl_size <= buffer.sum() with (item.data.size())) begin
+                    
+                    while(ctrl_size <= buffer.sum() with (item.data.size())) begin
+                        cfs_md_item_mon tx_item = cfs_md_item_mon::type_id::create("tx_item", this);
+
+                        tx_item.offset = ctrl_offset;
+
+                        void'(tx_item.begin_tr(buffer[0].get_begin_time()));
+
+                        while(tx_item.data.size() < ctrl_size) begin
+                            cfs_md_item_mon buffer_item = buffer.pop_front();
+
+                            if (tx_item.data.size() + buffer_item.data.size() <= ctrl_size) begin
+                                foreach(buffer_item.data[idx]) begin
+                                    tx_item.data.push_back(buffer_item.data[idx]);
+                                end
+                            
+                            end else begin
+                                cfs_md_item_mon items[$];
+                                int unsigned num_bytes = ctrl_size - tx_item.data.size();
+                                
+                                this.split(num_bytes, buffer_item, items);
+                                
+                                foreach(items[0].data[idx]) begin
+                                    tx_item.data.push_back(items[0].data[idx]);
+                                end
+
+                                this.buffer.push_front(items[1]);
+                            end
+                        end 
+                        if(tx_item.data.size() == ctrl_size) begin
+
+                            void'(tx_item.end_tr());
+                            push_to_tx_fifo(tx_item);
+                        
+                        end else begin
+                        
+                           `uvm_fatal("ALGORITHM_ISSUE", 
+                                $sformatf("TX item size %0d > ctrl_size %0d — split logic error", 
+                                    tx_item.data.size(), ctrl_size)
+                            )
+                        
+                        end
+                    end
+                end else begin
+                    @(posedge vif.clk);
+                end
+            end
+        endtask
+
+        local virtual function void align_nb();
+             if (process_align != null) begin
+                `uvm_fatal("ALGORITHM_ISSUE", 
+                    "Cannot start two instances of \"align()\" task")
+            end
+
+            fork 
+                begin 
+                    process_align = process::self();
+
+                    align();
+
+                    process_align = null;
+                end 
+            join_none
+        endfunction
+        
 
     endclass
 
