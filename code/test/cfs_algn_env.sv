@@ -21,6 +21,9 @@
 		//Model Handler
 		cfs_algn_model model;
 
+		// ScoreBoard Handler
+		cfs_algn_scoreboard scoreboard;
+
 		// Predictor Handler
 		cfs_algn_reg_predictor#(cfs_apb_item_mon) predictor;
 
@@ -58,6 +61,8 @@
 			predictor = cfs_algn_reg_predictor#(cfs_apb_item_mon)::type_id::create(
 				"predictor", this
 			);
+
+			scoreboard = cfs_algn_scoreboard::type_id::create("scoreboard", this);
 		endfunction
 
 		virtual function void connect_phase(uvm_phase phase);
@@ -94,6 +99,19 @@
 			md_rx_agent.monitor.output_port.connect(model.port_in_rx);
 			md_tx_agent.monitor.output_port.connect(model.port_in_tx);
 
+
+			begin: Connect_scoreboard
+
+				scoreboard.env_config = this.env_config;
+
+				model.port_out_rx.connect( scoreboard.port_in_model_rx );
+				model.port_out_tx.connect( scoreboard.port_in_model_tx );
+				model.port_out_irq.connect(scoreboard.port_in_model_irq);
+
+				md_rx_agent.monitor.output_port.connect(scoreboard.port_in_agent_rx);
+				md_tx_agent.monitor.output_port.connect(scoreboard.port_in_agent_tx);
+
+			end 
 
 
 		endfunction
