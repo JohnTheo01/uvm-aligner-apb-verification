@@ -34,6 +34,8 @@
 
     `include "cfs_algn_model.sv"
 
+    `include "cfs_algn_scoreboard.sv"
+
 
     `include "cfs_algn_env.sv"
 
