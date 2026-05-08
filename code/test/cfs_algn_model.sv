@@ -408,7 +408,6 @@
                 UVM_NONE 
             )
 
-            // port_out_rx.write(CFS_MD_OKAY);
         endtask
 
         protected virtual function void split(int unsigned num_bytes, cfs_md_item_mon item, ref cfs_md_item_mon items[$]);
@@ -454,7 +453,6 @@
                 items.push_back(splitted_item);
 
             end
-
         endfunction
 
         protected virtual task align();
@@ -504,7 +502,7 @@
                         end else begin
                         
                            `uvm_fatal("ALGORITHM_ISSUE", 
-                                $sformatf("TX item size %0d > ctrl_size %0d — split logic error", 
+                                $sformatf("TX item size %0d > ctrl_size %0d - split logic error", 
                                     tx_item.data.size(), ctrl_size)
                             )
                         
