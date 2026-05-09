@@ -12,15 +12,19 @@
         local int unsigned algn_data_width;
 
         local int unsigned exp_rx_response_threshold;
+        local int unsigned exp_tx_items_threshold;
 
         `uvm_component_utils(cfs_algn_env_config)
 
         function new(string name = "", uvm_component parent);
             super.new(name, parent);
 
-            has_checks = 1;
-            algn_data_width = 8;
-            exp_rx_response_threshold = 10;
+            has_checks                  = 1;
+            algn_data_width             = 8;
+
+            exp_rx_response_threshold   = 10;
+            exp_tx_items_threshold      = 10;
+
         endfunction
 
         virtual function void start_of_simulation_phase(uvm_phase phase);
@@ -72,13 +76,22 @@
         endfunction
 
       
-        // ----------------------------------- exp_rx_respnse_threshold -----------------------------------
-        virtual function void set_exp_rx_respnse_threshold(int unsigned value);
+        // ----------------------------------- exp_rx_response_threshold -----------------------------------
+        virtual function void set_exp_rx_response_threshold(int unsigned value);
             this.exp_rx_response_threshold = value;
         endfunction
 
-        virtual function int unsigned get_exp_rx_respnse_threshold();
+        virtual function int unsigned get_exp_rx_response_threshold();
             return this.exp_rx_response_threshold;
+        endfunction
+
+        // ----------------------------------- exp_tx_items_threshold -----------------------------------
+         virtual function void set_exp_tx_items_threshold(int unsigned value);
+            this.exp_tx_items_threshold = value;
+        endfunction
+
+        virtual function int unsigned get_exp_tx_items_threshold();
+            return this.exp_tx_items_threshold;
         endfunction
 
     endclass

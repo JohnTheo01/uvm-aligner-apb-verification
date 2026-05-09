@@ -30,7 +30,7 @@
 
         // ----------------------------------- Exp Responses -----------------------------------
         protected cfs_md_response exp_rx_response[$];
-        local process process_exp_tx_response_watch_dog[$];
+        local process process_exp_rx_response_watch_dog[$];
 
         protected cfs_md_item_mon exp_tx_items[$];
         local process process_exp_tx_items_watch_dog[$];
@@ -50,8 +50,9 @@
         // ----------------------------------- RESET LOGIC -----------------------------------
         virtual function void handle_reset(uvm_phase phase);
             exp_rx_response.delete();
+            exp_tx_items.delete();
 
-            kill_processes_from_queue(process_exp_tx_response_watch_dog);
+            kill_processes_from_queue(process_exp_rx_response_watch_dog);
             kill_processes_from_queue(process_exp_tx_items_watch_dog);
         endfunction
 
@@ -79,7 +80,16 @@
         endfunction
 
         virtual function void write_in_model_tx(cfs_md_item_mon item);
+             if (exp_tx_items.size() >= 1) begin
+                `uvm_fatal("ALGORITHM_ISSUE", 
+                    $sformatf("There are already %0d entries in exp_tx_items",
+                        exp_rx_response.size())
+                )
+            end
 
+            exp_tx_items.push_back(item);
+
+            exp_tx_items_watchdog_nb(item);
         endfunction
 
         virtual function void write_in_model_irq(bit irq);
@@ -90,11 +100,18 @@
 
         virtual function void write_in_agent_rx(cfs_md_item_mon item_mon);
             if (item_mon.is_active() == 0) begin
-                cfs_md_response exp_response = exp_rx_response.pop_back();
+                cfs_md_response exp_response;
 
-                process_exp_tx_response_watch_dog[0].kill();
+                if (exp_rx_response.size() == 0) begin
+                    `uvm_error("DUT_ERROR", "Unexpected RX response")
+                    return;
+                end
 
-                void'(process_exp_tx_response_watch_dog.pop_front());
+                exp_response = exp_rx_response.pop_front();
+
+                process_exp_rx_response_watch_dog[0].kill();
+
+                void'(process_exp_rx_response_watch_dog.pop_front());
 
                 if (env_config.get_has_checks()) begin
                     if (item_mon.response != exp_response) begin
@@ -108,8 +125,41 @@
             end
         endfunction
 
-        virtual function void write_in_agent_tx(cfs_md_item_mon item);
+        virtual function void write_in_agent_tx(cfs_md_item_mon item_mon);
+            cfs_md_item_mon exp_item;
 
+            if (item_mon.is_active()) begin
+                return;
+            end
+            
+
+            if (exp_tx_items.size() == 0) begin
+                `uvm_error("DUT_ERROR", "Unexpected TX item")
+                return;
+            end
+            
+            exp_item = exp_tx_items.pop_front();
+
+            process_exp_tx_items_watch_dog[0].kill();
+
+            void'(process_exp_tx_items_watch_dog.pop_front());
+
+            if (env_config.get_has_checks()) begin
+
+                if (
+                    (item_mon.offset != exp_item.offset)            ||
+                    (item_mon.data.size() != exp_item.data.size())  ||
+                    (item_mon.data != exp_item.data)
+                ) begin
+                    `uvm_error("DUT_ERROR", 
+                        $sformatf("Mismatch detected for the TX items -> expected: %0s, received: %0s",
+                            exp_item.convert2string(), item_mon.convert2string()
+                        )
+                    )
+                end
+
+            end
+            
             
         endfunction
 
@@ -118,7 +168,7 @@
         protected virtual task exp_rx_response_watchdog(cfs_md_response response);
             
             cfs_algn_vif vif        = env_config.get_vif();
-            int unsigned threshold  = env_config.get_exp_rx_respnse_threshold();
+            int unsigned threshold  = env_config.get_exp_rx_response_threshold();
             time start_time         = $time();
 
             repeat(threshold) begin
@@ -138,18 +188,18 @@
         local function void exp_rx_response_watchdog_nb(cfs_md_response response);
             fork 
                 begin
-                    process_exp_tx_response_watch_dog.push_back(process::self());
+                    process_exp_rx_response_watch_dog.push_back(process::self());
 
                     exp_rx_response_watchdog(response);
 
-                    if (process_exp_tx_response_watch_dog.size() == 0) begin
+                    if (process_exp_rx_response_watch_dog.size() == 0) begin
                         `uvm_fatal(
                             "ALGORITHM_ISSUE", 
-                            "At the end of task exp_rx_response_watchdog() the queue of processes process_exp_tx_response_watch_dog is empty"
+                            "At the end of task exp_rx_response_watchdog() the queue of processes process_exp_rx_response_watch_dog is empty"
                         )
                     end
 
-                    void'(process_exp_tx_response_watch_dog.pop_front());                    
+                    void'(process_exp_rx_response_watch_dog.pop_front());                    
 
                 end 
             join_none
