@@ -45,6 +45,13 @@
 
         local process process_tx_ctrl;
 
+        // ----------------------------------- FIFO Synchronization processes -----------------------------------
+        process process_set_rx_fifo_empty;
+        process process_set_rx_fifo_full;
+
+        process process_set_tx_fifo_empty;
+        process process_set_tx_fifo_full;
+
         `uvm_component_utils(cfs_algn_model)
 
         function new(string name = "", uvm_component parent);
@@ -104,6 +111,12 @@
             this.kill_process(process_build_buffer);
             this.kill_process(process_align);
             this.kill_process(process_tx_ctrl);
+
+            this.kill_process(process_set_rx_fifo_empty);
+            this.kill_process(process_set_rx_fifo_full);
+
+            this.kill_process(process_set_tx_fifo_empty);
+            this.kill_process(process_set_tx_fifo_full);
 
             rx_fifo.flush();
             tx_fifo.flush();
@@ -232,21 +245,31 @@
 
         // ----------------------------------- RX FIFO -----------------------------------
        
-
         protected virtual function void set_rx_fifo_full();
-            void'(reg_block.IRQ.RX_FIFO_FULL.predict(1));
+            fork 
+                begin
+                    process_set_rx_fifo_full = process::self();
 
-            `uvm_info("DEBUG", $sformatf(
-                "RX FIFO is full - %0s: %0d",
-                reg_block.IRQEN.RX_FIFO_FULL.get_full_name(), 
-                reg_block.STATUS.RX_LVL.get_mirrored_value()
-                ),
-                UVM_NONE
-            )
+                    repeat(2) begin
+                        uvm_wait_for_nba_region();
+                    end
 
-            if (reg_block.IRQEN.RX_FIFO_FULL.get_mirrored_value() == 1) begin
-                port_out_irq.write(1);
-            end
+                     void'(reg_block.IRQ.RX_FIFO_FULL.predict(1));
+
+                `uvm_info("DEBUG", $sformatf(
+                    "RX FIFO is full - %0s: %0d",
+                    reg_block.IRQEN.RX_FIFO_FULL.get_full_name(), 
+                    reg_block.STATUS.RX_LVL.get_mirrored_value()
+                    ),
+                    UVM_NONE
+                )
+
+                if (reg_block.IRQEN.RX_FIFO_FULL.get_mirrored_value() == 1) begin
+                    port_out_irq.write(1);
+                end
+
+                end
+            join_none 
         endfunction
 
         protected virtual function void inc_rx_lvl();
@@ -262,6 +285,8 @@
             rx_fifo.put(item_mon);
 
             inc_rx_lvl();
+
+            kill_set_rx_fifo_empty();
 
             `uvm_info("DEBUG", $sformatf(
                 "Rx Fifo push - new_level: %d, pushed_entry: %0s",
@@ -291,22 +316,46 @@
             join_none
         endfunction 
 
+        protected virtual function void kill_set_rx_fifo_empty();
+            fork 
+                begin
+                    // Wait one time unit
+                    // This can be used ONLY if the two processes are on the same clock
+                    uvm_wait_for_nba_region();
+
+                    kill_process(process_set_rx_fifo_empty);
+                end
+            join_none
+
+        endfunction
+
         // ----------------------------------- BUFFER LOGIC -----------------------------------
         
         protected virtual function void set_rx_fifo_empty();
-            void'(reg_block.IRQ.RX_FIFO_EMPTY.predict(1));
+            fork 
+                begin
+                    process_set_rx_fifo_empty = process::self();
 
-            `uvm_info("DEBUG", $sformatf(
-                "RX FIFO is empty - %0s: %0d",
-                reg_block.IRQEN.RX_FIFO_EMPTY.get_full_name(), 
-                reg_block.STATUS.RX_LVL.get_mirrored_value()
-                ),
-                UVM_NONE
-            )
+                    repeat(2) begin
+                        uvm_wait_for_nba_region();
+                    end
 
-            if (reg_block.IRQEN.RX_FIFO_EMPTY.get_mirrored_value() == 1) begin
-                port_out_irq.write(1);
-            end
+                    void'(reg_block.IRQ.RX_FIFO_EMPTY.predict(1));
+
+                    `uvm_info("DEBUG", $sformatf(
+                        "RX FIFO is empty - %0s: %0d",
+                        reg_block.IRQEN.RX_FIFO_EMPTY.get_full_name(), 
+                        reg_block.STATUS.RX_LVL.get_mirrored_value()
+                        ),
+                        UVM_NONE
+                    )
+
+                    if (reg_block.IRQEN.RX_FIFO_EMPTY.get_mirrored_value() == 1) begin
+                        port_out_irq.write(1);
+                    end
+
+                end
+            join_none
         endfunction
 
         protected virtual function void dec_rx_lvl();
@@ -324,6 +373,8 @@
             rx_fifo.get(item);
 
             dec_rx_lvl();
+
+            kill_set_rx_fifo_full();
 
             `uvm_info("DEBUG", $sformatf(
                 "Rx Fifo pop - new_level: %d, popped_entry: %0s",
@@ -369,21 +420,43 @@
             join_none
         endfunction
 
+        protected virtual function void kill_set_rx_fifo_full();
+            fork
+                begin
+                    uvm_wait_for_nba_region();
+
+                    kill_process(process_set_rx_fifo_full);
+                end
+            join_none
+        endfunction 
+
         // ----------------------------------- ALIGN -----------------------------------
         protected virtual function void set_tx_fifo_full();
-            void'(reg_block.IRQ.TX_FIFO_FULL.predict(1));
+            
+            fork
+                begin
+                    process_set_tx_fifo_full = process::self();
 
-            `uvm_info("DEBUG", $sformatf(
-                "TX FIFO is FULL - %0s: %0d",
-                reg_block.IRQEN.TX_FIFO_FULL.get_full_name(), 
-                reg_block.STATUS.TX_LVL.get_mirrored_value()
-                ),
-                UVM_NONE
-            )
+                    repeat(2) begin
+                        uvm_wait_for_nba_region();
+                    end
 
-            if (reg_block.IRQEN.TX_FIFO_FULL.get_mirrored_value() == 1) begin
-                port_out_irq.write(1);
-            end
+                     void'(reg_block.IRQ.TX_FIFO_FULL.predict(1));
+
+                    `uvm_info("DEBUG", $sformatf(
+                        "TX FIFO is FULL - %0s: %0d",
+                        reg_block.IRQEN.TX_FIFO_FULL.get_full_name(), 
+                        reg_block.STATUS.TX_LVL.get_mirrored_value()
+                        ),
+                        UVM_NONE
+                    )
+
+                    if (reg_block.IRQEN.TX_FIFO_FULL.get_mirrored_value() == 1) begin
+                        port_out_irq.write(1);
+                    end
+
+                end                
+            join_none
         endfunction
 
         protected virtual function void inc_tx_lvl();
@@ -400,6 +473,8 @@
             tx_fifo.put(item);
 
             inc_tx_lvl();
+
+            kill_set_tx_fifo_empty();
 
             `uvm_info("DEBUG", $sformatf(
                 "Tx Fifo push - new_level: %d, pushed_entry: %0s",
@@ -531,21 +606,42 @@
             join_none
         endfunction
         
+        protected virtual function void kill_set_tx_fifo_full();
+            fork
+                begin
+                    uvm_wait_for_nba_region();
+
+                    kill_process(process_set_tx_fifo_full);
+                end
+            join_none
+        endfunction
+
         // ----------------------------------- TX Contrloller -----------------------------------
         protected virtual function void set_tx_fifo_empty();
-            void'(reg_block.IRQ.TX_FIFO_EMPTY.predict(1));
+            fork 
+                begin
+                    process_set_tx_fifo_empty = process::self();
 
-            `uvm_info("DEBUG", $sformatf(
-                "TX FIFO is EMPTY - %0s: %0d",
-                reg_block.IRQEN.TX_FIFO_EMPTY.get_full_name(), 
-                reg_block.STATUS.TX_LVL.get_mirrored_value()
-                ),
-                UVM_NONE
-            )
+                    repeat(2) begin
+                        uvm_wait_for_nba_region();
+                    end
 
-            if (reg_block.IRQEN.TX_FIFO_EMPTY.get_mirrored_value() == 1) begin
-                port_out_irq.write(1);
-            end
+                    void'(reg_block.IRQ.TX_FIFO_EMPTY.predict(1));
+
+                    `uvm_info("DEBUG", $sformatf(
+                        "TX FIFO is EMPTY - %0s: %0d",
+                        reg_block.IRQEN.TX_FIFO_EMPTY.get_full_name(), 
+                        reg_block.STATUS.TX_LVL.get_mirrored_value()
+                        ),
+                        UVM_NONE
+                    )
+
+                    if (reg_block.IRQEN.TX_FIFO_EMPTY.get_mirrored_value() == 1) begin
+                        port_out_irq.write(1);
+                    end
+                end
+            join_none
+            
         endfunction
 
         protected virtual function void dec_tx_lvl();
@@ -558,10 +654,12 @@
             end
         endfunction
 
-        protected virtual task  pop_from_tx_fifo(ref cfs_md_item_mon item);
+        protected virtual task pop_from_tx_fifo(ref cfs_md_item_mon item);
             tx_fifo.get(item);
 
             dec_tx_lvl();
+
+            kill_set_tx_fifo_full();
 
             `uvm_info("DEBUG", $sformatf(
                 "Tx Fifo pop - new_level: %d, popped_entry: %0s",
@@ -586,7 +684,7 @@
         endtask
 
         local virtual function void tx_ctrl_nb();
-            if (process_align != null) begin
+            if (process_tx_ctrl != null) begin
                 `uvm_fatal("ALGORITHM_ISSUE", 
                     "Cannot start two instances of \"tx_ctrl()\" task")
             end
@@ -601,6 +699,17 @@
                 end 
             join_none
         endfunction
+
+        protected virtual function void kill_set_tx_fifo_empty();
+            fork
+                begin
+                    uvm_wait_for_nba_region();
+
+                    kill_process(process_set_tx_fifo_empty);
+                end
+            join_none
+        endfunction
+
     endclass
 
 `endif
