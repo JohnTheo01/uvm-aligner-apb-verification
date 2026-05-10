@@ -33,6 +33,7 @@ module testbench();
   // Συνδέουμε το reset.
   assign md_rx_if.reset_n = apb_if.preset_n;
   assign md_tx_if.reset_n = apb_if.preset_n;
+  assign algn_if.reset_n  = apb_if.preset_n;
   
   //Initial reset generator
   initial begin
@@ -88,14 +89,14 @@ module testbench();
     .reset_n(apb_if.preset_n),
     
     // APB interface
-    .paddr    (apb_if.paddr),
-    .pwrite   (apb_if.pwrite),
-    .psel     (apb_if.psel),
-    .penable  (apb_if.penable),
-    .pwdata   (apb_if.pwdata),
-    .pready   (apb_if.pready),
-    .prdata   (apb_if.prdata),
-    .pslverr  (apb_if.pslverr),
+    .paddr        (apb_if.paddr),
+    .pwrite       (apb_if.pwrite),
+    .psel         (apb_if.psel),
+    .penable      (apb_if.penable),
+    .pwdata       (apb_if.pwdata),
+    .pready       (apb_if.pready),
+    .prdata       (apb_if.prdata),
+    .pslverr      (apb_if.pslverr),
 
     // MD RX interface
     .md_rx_valid  (md_rx_if.valid),
@@ -111,7 +112,10 @@ module testbench();
     .md_tx_offset (md_tx_if.offset),
     .md_tx_size   (md_tx_if.size),
     .md_tx_ready  (md_tx_if.ready),
-    .md_tx_err    (md_tx_if.err)
+    .md_tx_err    (md_tx_if.err),
+
+    // IRQ
+    .irq          (algn_if.irq)
   );
   
   

@@ -4,6 +4,9 @@
 
     interface cfs_algn_if(input clk);
         
+        logic reset_n;
+
+        logic irq;
     endinterface
 
 `endif

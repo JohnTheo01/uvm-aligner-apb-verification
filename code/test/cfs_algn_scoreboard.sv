@@ -35,6 +35,10 @@
         protected cfs_md_item_mon exp_tx_items[$];
         local process process_exp_tx_items_watch_dog[$];
 
+        protected bit exp_irqs[$];
+        local process process_exp_irqs_watch_dog[$];
+        local process process_rcv_irq;
+
         `uvm_component_utils(cfs_algn_scoreboard)
 
         function new(string name = "", uvm_component parent);
@@ -51,9 +55,19 @@
         virtual function void handle_reset(uvm_phase phase);
             exp_rx_response.delete();
             exp_tx_items.delete();
+            exp_irqs.delete();
 
             kill_processes_from_queue(process_exp_rx_response_watch_dog);
             kill_processes_from_queue(process_exp_tx_items_watch_dog);
+            kill_processes_from_queue(process_exp_irqs_watch_dog);
+            
+            if (process_rcv_irq != null) begin
+                process_rcv_irq.kill();
+
+                process_rcv_irq = null;
+            end
+
+            rcv_irq_nb();
         endfunction
 
         protected virtual function void kill_processes_from_queue(ref process processes[$]);
@@ -93,7 +107,16 @@
         endfunction
 
         virtual function void write_in_model_irq(bit irq);
+             if (exp_irqs.size() >= 5) begin
+                `uvm_fatal("ALGORITHM_ISSUE", 
+                    $sformatf("There are already %0d entries in exp_irqs",
+                        exp_rx_response.size())
+                )
+            end
 
+            exp_irqs.push_back(irq);
+
+            exp_irqs_watchdog_nb(irq);
         endfunction
 
         // ----------------------------------- Agent Writing Ports -----------------------------------
@@ -242,6 +265,84 @@
 
                     void'(process_exp_tx_items_watch_dog.pop_front());                    
 
+                end 
+            join_none
+        endfunction
+
+        // ----------------------------------- Exp IRQS -----------------------------------
+        protected virtual task exp_irqs_watchdog(bit irq);
+            cfs_algn_vif vif        = env_config.get_vif();
+            int unsigned threshold  = env_config.get_exp_irqs_threshold();
+            time start_time         = $time();
+
+            repeat(threshold) begin
+                @(posedge vif.clk);
+            end
+
+            if (env_config.get_has_checks()) begin
+                `uvm_error("DUT_ERROR", 
+                    $sformatf(
+                        "The IRQ: %0b, expected from time %0t was not received after %0d clock cycles",
+                        irq, start_time, threshold
+                    )
+                )
+            end
+
+        endtask
+
+        local function void exp_irqs_watchdog_nb(bit irq);
+            fork 
+                begin
+                    process_exp_irqs_watch_dog.push_back(process::self());
+
+                    exp_irqs_watchdog(irq);
+
+                    if (process_exp_irqs_watch_dog.size() == 0) begin
+                        `uvm_fatal(
+                            "ALGORITHM_ISSUE", 
+                            "At the end of task exp_irqs_watchdog() the queue of processes process_exp_irqs_watch_dog is empty"
+                        )
+                    end
+
+                    void'(process_exp_irqs_watch_dog.pop_front());                    
+
+                end 
+            join_none
+        endfunction
+
+        protected virtual task rcv_irq();
+            cfs_algn_vif vif = env_config.get_vif();
+
+            forever begin
+                @(posedge vif.clk iff(vif.irq & vif.reset_n));
+
+                if (exp_irqs.size() == 0) begin
+                    if(env_config.get_has_checks()) begin
+                        `uvm_error("DUT_ERROR", "Unexpected IRQ detected")
+                    end
+                end else begin
+                    void'(exp_irqs.pop_front());
+
+                    process_exp_irqs_watch_dog[0].kill();
+
+                    void'(process_exp_irqs_watch_dog.pop_front());
+                end
+
+            end
+        endtask
+
+        local function void rcv_irq_nb();
+            if (process_rcv_irq != null) begin
+                `uvm_fatal("ALGORITHM_ISSUE", "Cannot two instances of rcv_irq() task")
+            end
+
+            fork 
+                begin
+                    process_rcv_irq = process::self();
+
+                    rcv_irq();
+
+                    process_rcv_irq = null;                    
                 end 
             join_none
         endfunction
