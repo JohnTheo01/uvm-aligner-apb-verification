@@ -13,6 +13,7 @@
 
         local int unsigned exp_rx_response_threshold;
         local int unsigned exp_tx_items_threshold;
+        local int unsigned exp_irqs_threshold;
 
         `uvm_component_utils(cfs_algn_env_config)
 
@@ -24,6 +25,7 @@
 
             exp_rx_response_threshold   = 10;
             exp_tx_items_threshold      = 10;
+            exp_irqs_threshold          = 10;
 
         endfunction
 
@@ -86,12 +88,21 @@
         endfunction
 
         // ----------------------------------- exp_tx_items_threshold -----------------------------------
-         virtual function void set_exp_tx_items_threshold(int unsigned value);
+        virtual function void set_exp_tx_items_threshold(int unsigned value);
             this.exp_tx_items_threshold = value;
         endfunction
 
         virtual function int unsigned get_exp_tx_items_threshold();
             return this.exp_tx_items_threshold;
+        endfunction
+
+        // ----------------------------------- exp_irqs_threshold -----------------------------------
+        virtual function void set_exp_irqs_threshold(int unsigned value);
+            this.exp_irqs_threshold = value;
+        endfunction
+
+        virtual function int unsigned get_exp_irqs_threshold();
+            return this.exp_irqs_threshold;
         endfunction
 
     endclass
