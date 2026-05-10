@@ -30,6 +30,9 @@
                 end
             join_none
 
+            env.model.reg_block.IRQEN.write(status, 5'b11111);
+
+
             void'(env.model.reg_block.CTRL.randomize());
             env.model.reg_block.CTRL.update(status);
 
