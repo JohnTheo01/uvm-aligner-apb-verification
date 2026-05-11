@@ -7,6 +7,16 @@
         logic reset_n;
 
         logic irq;
+
+        // ----------------------------------- Synch Signals -----------------------------------
+        logic rx_fifo_push;
+
+        logic rx_fifo_pop;
+
+        logic tx_fifo_push;
+
+        logic tx_fifo_pop;
+        
     endinterface
 
 `endif
