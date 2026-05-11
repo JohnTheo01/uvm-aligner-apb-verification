@@ -42,9 +42,7 @@
 
                 seq_simple.set_sequencer(env.md_rx_agent.sequencer);
                 
-                void'(seq_simple.randomize() with {
-                   
-                });
+                void'(seq_simple.randomize());
 
                 seq_simple.start(env.md_rx_agent.sequencer);
             end
