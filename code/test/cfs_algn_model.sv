@@ -52,6 +52,10 @@
         process process_set_tx_fifo_empty;
         process process_set_tx_fifo_full;
 
+        // ----------------------------------- exp_irq -----------------------------------
+        bit exp_irq;
+        process process_send_exp_irq;
+
         `uvm_component_utils(cfs_algn_model)
 
         function new(string name = "", uvm_component parent);
@@ -69,6 +73,8 @@
             tx_fifo = new("tx_fifo", this, 8);
 
             tx_complete = new("tx_complete");
+
+            exp_irq = 0;
         endfunction
 
         virtual function void build_phase(uvm_phase phase);
@@ -118,15 +124,21 @@
             this.kill_process(process_set_tx_fifo_empty);
             this.kill_process(process_set_tx_fifo_full);
 
+            this.kill_process(process_send_exp_irq);
+
             rx_fifo.flush();
             tx_fifo.flush();
             buffer = {};
 
             tx_complete.reset();
 
+            this.exp_irq = 0;
+
             build_buffer_nb();
             align_nb();
             tx_ctrl_nb();
+            send_exp_irq_nb();
+
         endfunction
 
         virtual function void write_in_rx(cfs_md_item_mon item_mon);
@@ -199,7 +211,7 @@
             )
 
             if (reg_block.IRQEN.MAX_DROP.get_mirrored_value() == 1) begin
-                port_out_irq.write(1);
+                this.exp_irq = 1;
             end
         endfunction
 
@@ -245,6 +257,38 @@
             end
         endfunction
 
+        // ----------------------------------- Handle exp_irqs -----------------------------------
+        protected virtual task send_exp_irq();
+            cfs_algn_vif vif = env_config.get_vif();
+
+            forever begin
+                @(negedge vif.clk);
+
+                if (this.exp_irq == 1) begin
+                    port_out_irq.write(1);
+
+                    this.exp_irq = 0;
+                end
+            end
+        endtask
+
+        local function void send_exp_irq_nb();
+            if (process_send_exp_irq != null) begin
+                `uvm_fatal("ALGORITHM_ISSUE", 
+                    "Cannot start two instances of \"send_exp_irq()\" task")
+            end
+
+            fork 
+                begin 
+                    process_send_exp_irq = process::self();
+
+                    send_exp_irq();
+
+                    process_send_exp_irq = null;
+                end 
+            join_none
+        endfunction
+
         // ----------------------------------- RX FIFO -----------------------------------
        
         protected virtual function void set_rx_fifo_full();
@@ -267,7 +311,7 @@
                 )
 
                 if (reg_block.IRQEN.RX_FIFO_FULL.get_mirrored_value() == 1) begin
-                    port_out_irq.write(1);
+                    exp_irq = 1;
                 end
 
                 end
@@ -358,8 +402,9 @@
                 end
             join
         endtask
-        // ----------------------------------- BUFFER LOGIC -----------------------------------
         
+        // ----------------------------------- BUFFER LOGIC -----------------------------------     
+
         protected virtual function void set_rx_fifo_empty();
             fork 
                 begin
@@ -380,7 +425,7 @@
                     )
 
                     if (reg_block.IRQEN.RX_FIFO_EMPTY.get_mirrored_value() == 1) begin
-                        port_out_irq.write(1);
+                        this.exp_irq = 1;
                     end
 
                 end
@@ -510,7 +555,7 @@
                     )
 
                     if (reg_block.IRQEN.TX_FIFO_FULL.get_mirrored_value() == 1) begin
-                        port_out_irq.write(1);
+                        this.exp_irq = 1;
                     end
 
                 end                
@@ -628,22 +673,22 @@
 
                                 this.buffer.push_front(items[1]);
                             end
+                        end
 
-                            if(tx_item.data.size() == ctrl_size) begin
+                        if(tx_item.data.size() == ctrl_size) begin
 
-                                void'(tx_item.end_tr());
-                                push_to_tx_fifo(tx_item);
+                            void'(tx_item.end_tr());
+                            push_to_tx_fifo(tx_item);
+                    
+                        end else begin
                         
-                            end else begin
+                            `uvm_fatal("ALGORITHM_ISSUE", 
+                                    $sformatf("TX item size %0d > ctrl_size %0d - split logic error", 
+                                        tx_item.data.size(), ctrl_size)
+                                )
                             
-                                `uvm_fatal("ALGORITHM_ISSUE", 
-                                        $sformatf("TX item size %0d > ctrl_size %0d - split logic error", 
-                                            tx_item.data.size(), ctrl_size)
-                                    )
-                                
-                            end
+                        end
 
-                        end 
                         
                     end
                 end else begin
@@ -725,7 +770,7 @@
                     )
 
                     if (reg_block.IRQEN.TX_FIFO_EMPTY.get_mirrored_value() == 1) begin
-                        port_out_irq.write(1);
+                        this.exp_irq = 1;
                     end
                 end
             join_none
