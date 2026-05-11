@@ -156,8 +156,6 @@
                 end
 
             endcase
-
-
         endfunction
 
         virtual function void write_in_tx(cfs_md_item_mon item_mon);
@@ -213,25 +211,29 @@
                 return;
             end
 
-            if (reg_block.STATUS.CNT_DROP.get_mirrored_value() == max_value) begin
-                this.set_max_drop();
-                return;
-            end
+            if (reg_block.STATUS.CNT_DROP.get_mirrored_value() < max_value) begin
 
-            begin
-                uvm_reg_data_t current_value = reg_block.STATUS.CNT_DROP.get_mirrored_value();
+                begin
+                    uvm_reg_data_t current_value = reg_block.STATUS.CNT_DROP.get_mirrored_value();
 
-                void'(reg_block.STATUS.CNT_DROP.predict(current_value + 1));
+                    void'(reg_block.STATUS.CNT_DROP.predict(current_value + 1));
 
-                `uvm_info("DEBUG", 
-                    $sformatf(
-                        "Increment - %0s: %0d due to %0s",
-                        reg_block.STATUS.CNT_DROP.get_full_name(),
-                        reg_block.STATUS.CNT_DROP.get_mirrored_value(),
-                        response.name()),
-                    UVM_NONE
+                    `uvm_info("DEBUG", 
+                        $sformatf(
+                            "Increment - %0s: %0d due to %0s",
+                            reg_block.STATUS.CNT_DROP.get_full_name(),
+                            reg_block.STATUS.CNT_DROP.get_mirrored_value(),
+                            response.name()),
+                        UVM_NONE
 
-                )
+                    )
+                end
+
+                if (reg_block.STATUS.CNT_DROP.get_mirrored_value() == max_value) begin
+                    this.set_max_drop();
+                    return;
+                end
+
             end
         endfunction
 
@@ -282,11 +284,14 @@
         endfunction
 
         protected virtual task push_to_rx_fifo(cfs_md_item_mon item_mon);
+            
+            sync_push_to_rx_fifo();
+            
             rx_fifo.put(item_mon);
 
-            inc_rx_lvl();
-
             kill_set_rx_fifo_empty();
+
+            inc_rx_lvl();
 
             `uvm_info("DEBUG", $sformatf(
                 "Rx Fifo push - new_level: %d, pushed_entry: %0s",
@@ -326,9 +331,33 @@
                     kill_process(process_set_rx_fifo_empty);
                 end
             join_none
-
         endfunction
 
+        protected virtual task sync_push_to_rx_fifo();
+            cfs_algn_vif vif = env_config.get_vif();
+
+            fork
+                begin
+                    fork
+                        begin 
+                            @(posedge vif.clk iff(vif.rx_fifo_push));
+                        end
+                        begin
+                            repeat(10) begin
+                                @(posedge vif.clk iff(
+                                    reg_block.STATUS.RX_LVL.get_mirrored_value() < rx_fifo.size())
+                                );
+                            end
+
+                            // This could also be error
+                            `uvm_warning("DUT_WARNING", "RX FIFO push did not synchronize with RTL")
+                        end
+                    join_any
+
+                    disable fork;
+                end
+            join
+        endtask
         // ----------------------------------- BUFFER LOGIC -----------------------------------
         
         protected virtual function void set_rx_fifo_empty();
@@ -345,7 +374,7 @@
                     `uvm_info("DEBUG", $sformatf(
                         "RX FIFO is empty - %0s: %0d",
                         reg_block.IRQEN.RX_FIFO_EMPTY.get_full_name(), 
-                        reg_block.STATUS.RX_LVL.get_mirrored_value()
+                        reg_block.IRQEN.RX_FIFO_EMPTY.get_mirrored_value()
                         ),
                         UVM_NONE
                     )
@@ -370,11 +399,14 @@
         endfunction
 
         protected virtual task pop_from_rx_fifo(ref cfs_md_item_mon item);
+            
+            sync_pop_to_rx_fifo();
+
             rx_fifo.get(item);
 
-            dec_rx_lvl();
-
             kill_set_rx_fifo_full();
+
+            dec_rx_lvl();
 
             `uvm_info("DEBUG", $sformatf(
                 "Rx Fifo pop - new_level: %d, popped_entry: %0s",
@@ -382,7 +414,6 @@
                 item.convert2string()),
                 UVM_NONE 
             )
-
         endtask
 
         protected virtual task build_buffer();
@@ -430,6 +461,33 @@
             join_none
         endfunction 
 
+        protected virtual task sync_pop_to_rx_fifo();
+            cfs_algn_vif vif = env_config.get_vif();
+
+            fork
+                begin
+                    fork
+                        begin 
+                            @(posedge vif.clk iff(vif.rx_fifo_pop));
+                        end
+                        begin
+                            repeat(10) begin
+                                @(posedge vif.clk iff(
+                                    // Check if the tx fifo can collect also
+                                    (reg_block.STATUS.RX_LVL.get_mirrored_value() > 0) && 
+                                    (reg_block.STATUS.TX_LVL.get_mirrored_value() < tx_fifo.size())
+                                ));
+                            end
+                            // This could also be error
+                            `uvm_warning("DUT_WARNING", "RX FIFO pop did not synchronize with RTL")
+                        end
+                    join_any
+
+                    disable fork;
+                end
+            join
+        endtask
+
         // ----------------------------------- ALIGN -----------------------------------
         protected virtual function void set_tx_fifo_full();
             
@@ -470,11 +528,14 @@
         endfunction
 
         protected virtual task push_to_tx_fifo(cfs_md_item_mon item);
+            
+            sync_push_to_tx_fifo();
+
             tx_fifo.put(item);
 
-            inc_tx_lvl();
-
             kill_set_tx_fifo_empty();
+
+            inc_tx_lvl();
 
             `uvm_info("DEBUG", $sformatf(
                 "Tx Fifo push - new_level: %d, pushed_entry: %0s",
@@ -482,7 +543,6 @@
                 item.convert2string()),
                 UVM_NONE 
             )
-
         endtask
 
         protected virtual function void split(int unsigned num_bytes, cfs_md_item_mon item, ref cfs_md_item_mon items[$]);
@@ -568,20 +628,23 @@
 
                                 this.buffer.push_front(items[1]);
                             end
-                        end 
-                        if(tx_item.data.size() == ctrl_size) begin
 
-                            void'(tx_item.end_tr());
-                            push_to_tx_fifo(tx_item);
+                            if(tx_item.data.size() == ctrl_size) begin
+
+                                void'(tx_item.end_tr());
+                                push_to_tx_fifo(tx_item);
                         
-                        end else begin
+                            end else begin
+                            
+                                `uvm_fatal("ALGORITHM_ISSUE", 
+                                        $sformatf("TX item size %0d > ctrl_size %0d - split logic error", 
+                                            tx_item.data.size(), ctrl_size)
+                                    )
+                                
+                            end
+
+                        end 
                         
-                           `uvm_fatal("ALGORITHM_ISSUE", 
-                                $sformatf("TX item size %0d > ctrl_size %0d - split logic error", 
-                                    tx_item.data.size(), ctrl_size)
-                            )
-                        
-                        end
                     end
                 end else begin
                     @(posedge vif.clk);
@@ -615,6 +678,31 @@
                 end
             join_none
         endfunction
+
+        protected virtual task sync_push_to_tx_fifo();
+            cfs_algn_vif vif = env_config.get_vif();
+
+            fork
+                begin
+                    fork
+                        begin 
+                            @(posedge vif.clk iff(vif.tx_fifo_push));
+                        end
+                        begin
+                            repeat(10) begin
+                                @(posedge vif.clk iff(
+                                    (reg_block.STATUS.TX_LVL.get_mirrored_value() < tx_fifo.size())
+                                ));
+                            end
+                            // This could also be error
+                            `uvm_warning("DUT_WARNING", "TX FIFO push did not synchronize with RTL")
+                        end
+                    join_any
+
+                    disable fork;
+                end
+            join
+        endtask
 
         // ----------------------------------- TX Contrloller -----------------------------------
         protected virtual function void set_tx_fifo_empty();
@@ -655,11 +743,14 @@
         endfunction
 
         protected virtual task pop_from_tx_fifo(ref cfs_md_item_mon item);
+            
+            sync_pop_to_tx_fifo();
+
             tx_fifo.get(item);
 
-            dec_tx_lvl();
-
             kill_set_tx_fifo_full();
+
+            dec_tx_lvl();
 
             `uvm_info("DEBUG", $sformatf(
                 "Tx Fifo pop - new_level: %d, popped_entry: %0s",
@@ -709,6 +800,31 @@
                 end
             join_none
         endfunction
+
+        protected virtual task sync_pop_to_tx_fifo();
+            cfs_algn_vif vif = env_config.get_vif();
+
+            fork
+                begin
+                    fork
+                        begin 
+                            @(posedge vif.clk iff(vif.tx_fifo_pop));
+                        end
+                        begin
+                            repeat(200) begin
+                                @(posedge vif.clk iff(
+                                    (reg_block.STATUS.TX_LVL.get_mirrored_value() > 0)
+                                ));
+                            end
+                              // This could also be error
+                            `uvm_warning("DUT_WARNING", "TX FIFO pop did not synchronize with RTL")
+                        end
+                    join_any
+
+                    disable fork;
+                end
+            join
+        endtask
 
     endclass
 

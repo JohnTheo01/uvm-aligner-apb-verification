@@ -117,6 +117,10 @@ module testbench();
     // IRQ
     .irq          (algn_if.irq)
   );
-  
-  
+
+  assign algn_if.rx_fifo_push = dut.core.rx_fifo.push_valid & dut.core.rx_fifo.push_ready; 
+  assign algn_if.rx_fifo_pop  = dut.core.rx_fifo.pop_valid & dut.core.rx_fifo.pop_ready;
+  assign algn_if.tx_fifo_push = dut.core.tx_fifo.push_valid & dut.core.tx_fifo.push_ready;
+  assign algn_if.tx_fifo_pop  = dut.core.tx_fifo.pop_valid & dut.core.tx_fifo.pop_ready;
+
 endmodule
