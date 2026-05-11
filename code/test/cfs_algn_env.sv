@@ -134,6 +134,7 @@
 
 		virtual function void handle_reset(uvm_phase phase);
 			model.handle_reset(phase);
+			scoreboard.handle_reset(phase);
 		endfunction
 		
 	endclass
