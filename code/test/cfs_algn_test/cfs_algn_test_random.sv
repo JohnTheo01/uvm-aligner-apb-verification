@@ -46,7 +46,7 @@
            
 
           
-            repeat(1) begin 
+            repeat(8) begin 
                 // cfs_md_sequence_simple_master seq_simple = cfs_md_sequence_simple_master::type_id::create("seq_simple");
 
                 // seq_simple.set_sequencer(env.md_rx_agent.sequencer);
