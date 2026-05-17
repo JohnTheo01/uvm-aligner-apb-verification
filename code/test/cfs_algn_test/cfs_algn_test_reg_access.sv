@@ -6,10 +6,19 @@
 
     class cfs_algn_test_reg_access extends cfs_algn_test_base;
 
+        // Number of register accesses
+        protected int unsigned num_reg_accesses;
+
+        // Number of unmapped accesses
+        protected int unsigned num_unmapped_accesses;
+
         `uvm_component_utils(cfs_algn_test_reg_access)
 
         function new(string name, uvm_component parent);
             super.new(name, parent);
+
+            this.num_reg_accesses = 100;
+            this.num_unmapped_accesses = 100;
         endfunction
 
         virtual task run_phase(uvm_phase phase);
@@ -19,50 +28,29 @@
 
             phase.raise_objection(this, "TEST_DONE");
 
-            `uvm_info("DEBUG", "start of test", UVM_LOW)
 
-        
-            #(100ns);
+            fork 
+                begin : DRIVE_REG_ACCESS
+                    // Drive register accesses
+                    cfs_algn_virtual_sequence_reg_access_random seq = cfs_algn_virtual_sequence_reg_access_random::type_id::create("seq");
 
-             fork
-                begin
-                    cfs_md_sequence_slave_response_forever seq_response_forever = cfs_md_sequence_slave_response_forever::type_id::create(
-                        "seq_response_forever"
-                    );
-                    
-                    seq_response_forever.start(env.md_tx_agent.sequencer);
+                    void'(seq.randomize() with {
+                        num_accesses == num_reg_accesses;
+                    });
+
+                    seq.start(env.virtual_sequencer);
                 end
-            join_none
+                begin : DRIVE_UNMAPPED_ACCESS
+                    // Drive APB accesses to unmapped locations
+                    cfs_algn_virtual_sequence_unmapped_access seq = cfs_algn_virtual_sequence_unmapped_access::type_id::create("seq");
 
+                    void'(seq.randomize() with {
+                        num_accesses == num_unmapped_accesses;
+                    });
 
-            repeat(2) begin 
-                cfs_md_sequence_simple_master seq_simple = cfs_md_sequence_simple_master::type_id::create("seq_simple");
-
-                seq_simple.set_sequencer(env.md_rx_agent.sequencer);
-                
-                void'(seq_simple.randomize() with {
-                   item.data.size() == 3;
-                   item.offset      == 0;
-                });
-
-                seq_simple.start(env.md_rx_agent.sequencer);
-            end
-
-            // Temporary as we have not implemented it in the model
-            void'(env.model.reg_block.STATUS.CNT_DROP.predict(2));
-            env.model.reg_block.STATUS.read(status, data);
-
-
-            env.model.reg_block.CTRL.CLR.set(1);
-            env.model.reg_block.CTRL.update(status);
-
-
-            env.model.reg_block.STATUS.read(status, data);
-
-            #(100ns);
-
-            `uvm_info("DEBUG", "end of test", UVM_LOW)
-
+                    seq.start(env.virtual_sequencer);
+                end
+            join
             phase.drop_objection(this, "TEST_DONE");
 
         endtask
