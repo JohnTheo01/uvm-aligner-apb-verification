@@ -1,0 +1,69 @@
+[
+  {
+    "type": "cfs_apb_item_drv",
+    "begin_time": 145,
+    "end_time": 175,
+    "dir": "CFS_APB_WRITE",
+    "addr": "0xf0",
+    "pre_drive_delay": 5,
+    "post_drive_delay": 3,
+    "data": "0x1f"
+  },
+  {
+    "type": "cfs_apb_item_drv",
+    "begin_time": 215,
+    "end_time": 245,
+    "dir": "CFS_APB_READ",
+    "addr": "0xfe02",
+    "pre_drive_delay": 1,
+    "post_drive_delay": 4
+  },
+  {
+    "type": "cfs_apb_item_drv",
+    "begin_time": 305,
+    "end_time": 335,
+    "dir": "CFS_APB_WRITE",
+    "addr": "0x848e",
+    "pre_drive_delay": 2,
+    "post_drive_delay": 4,
+    "data": "0x5d106034"
+  },
+  {
+    "type": "cfs_apb_item_drv",
+    "begin_time": 425,
+    "end_time": 455,
+    "dir": "CFS_APB_READ",
+    "addr": "0xa59f",
+    "pre_drive_delay": 5,
+    "post_drive_delay": 2
+  },
+  {
+    "type": "cfs_apb_item_drv",
+    "begin_time": 515,
+    "end_time": 545,
+    "dir": "CFS_APB_WRITE",
+    "addr": "0x5797",
+    "pre_drive_delay": 4,
+    "post_drive_delay": 2,
+    "data": "0x7e7944c2"
+  },
+  {
+    "type": "cfs_apb_item_drv",
+    "begin_time": 565,
+    "end_time": 595,
+    "dir": "CFS_APB_READ",
+    "addr": "0x3773",
+    "pre_drive_delay": 0,
+    "post_drive_delay": 2
+  },
+  {
+    "type": "cfs_apb_item_drv",
+    "begin_time": 615,
+    "end_time": 645,
+    "dir": "CFS_APB_WRITE",
+    "addr": "0x0",
+    "pre_drive_delay": 0,
+    "post_drive_delay": 0,
+    "data": "0x10002"
+  }
+]
