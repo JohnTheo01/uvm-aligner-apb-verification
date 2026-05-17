@@ -95,6 +95,18 @@
 
 			endfunction
 
+			virtual function void do_record(uvm_recorder recorder);
+				uvm_ext_json_recorder json_rec;
+				if ($cast(json_rec, recorder) == 0)
+					`uvm_fatal("ALGORITHM_ISSUE", $sformatf("Could not cast recorder from \"%0s\" to uvm_ext_json_recorder", recorder.get_type_name()))
+				json_rec.json_record_field_int("pre_drive_delay",  pre_drive_delay,  $bits(pre_drive_delay),  UVM_DEC);
+				json_rec.json_record_field_int("post_drive_delay", post_drive_delay, $bits(post_drive_delay), UVM_DEC);
+				json_rec.json_record_field_int("offset",           offset,           $bits(offset),           UVM_DEC);
+				json_rec.json_record_field_int("data_size",        data.size(),      32,                      UVM_DEC);
+				foreach(data[i])
+					json_rec.json_record_field($sformatf("data[%0d]", i), data[i], 8, UVM_HEX);
+			endfunction
+
 		endclass
 
 		class cfs_md_item_drv_slave extends cfs_md_item_drv;
@@ -121,6 +133,15 @@
 
 			virtual function string convert2string();
 			return $sformatf("length: %0d, response: %0s, ready_at_end: %0d", length, response.name(), ready_at_end);
+			endfunction
+
+			virtual function void do_record(uvm_recorder recorder);
+				uvm_ext_json_recorder json_rec;
+				if ($cast(json_rec, recorder) == 0)
+					`uvm_fatal("ALGORITHM_ISSUE", $sformatf("Could not cast recorder from \"%0s\" to uvm_ext_json_recorder", recorder.get_type_name()))
+				json_rec.json_record_field_int("length",       length,       $bits(length),       UVM_DEC);
+				json_rec.json_record_string(   "response",     response.name());
+				json_rec.json_record_field_int("ready_at_end", ready_at_end, $bits(ready_at_end), UVM_DEC);
 			endfunction
 
 		endclass
@@ -155,12 +176,25 @@
 				data_as_string = $sformatf("%0s'h%02x%0s", data_as_string, data[idx], idx == data.size() - 1 ? "" : ", ");
 				end
 
-				data_as_string = $sformatf("%0s}", data_as_string); 
+				data_as_string = $sformatf("%0s}", data_as_string);
 
-				return $sformatf("[%0t..%0s] data: %0s, size: %0d, offset: %0d, response: %0s, length: %0d, prev_item_delay: %0d", 
-								get_begin_time(), 
-								is_active() ? "" : $sformatf("%0t",  get_end_time()), 
+				return $sformatf("[%0t..%0s] data: %0s, size: %0d, offset: %0d, response: %0s, length: %0d, prev_item_delay: %0d",
+								get_begin_time(),
+								is_active() ? "" : $sformatf("%0t",  get_end_time()),
 								data_as_string, data.size(), offset, response.name(), length, prev_item_delay);
+			endfunction
+
+			virtual function void do_record(uvm_recorder recorder);
+				uvm_ext_json_recorder json_rec;
+				if ($cast(json_rec, recorder) == 0)
+					`uvm_fatal("ALGORITHM_ISSUE", $sformatf("Could not cast recorder from \"%0s\" to uvm_ext_json_recorder", recorder.get_type_name()))
+				json_rec.json_record_field_int("prev_item_delay", prev_item_delay, $bits(prev_item_delay), UVM_DEC);
+				json_rec.json_record_field_int("length",          length,          $bits(length),          UVM_DEC);
+				json_rec.json_record_field_int("offset",          offset,          $bits(offset),          UVM_DEC);
+				json_rec.json_record_string(   "response",        response.name());
+				json_rec.json_record_field_int("data_size",       data.size(),     32,                     UVM_DEC);
+				foreach(data[i])
+					json_rec.json_record_field($sformatf("data[%0d]", i), data[i], 8, UVM_HEX);
 			endfunction
 
 		endclass
@@ -285,6 +319,9 @@
 			//Pointer to agent configuration
 			cfs_md_agent_config#(DATA_WIDTH) agent_config;
 
+			uvm_ext_json_recorder  recorder;
+			uvm_ext_json_tr_logger logger;
+
 			`uvm_component_param_utils(cfs_md_monitor#(DATA_WIDTH))
 
 			function new(string name = "", uvm_component parent);
@@ -295,12 +332,18 @@
 				super.end_of_elaboration_phase(phase);
 				if ($cast(agent_config, super.agent_config) == 0) begin
 					`uvm_fatal(
-						"ALGORITHM_ISSUE", 
+						"ALGORITHM_ISSUE",
 						$sformatf(
 							"Could not covert from \"%0s\" to \"%0s\"",
 							super.agent_config.get_type_name(), cfs_md_agent_config#(DATA_WIDTH)::type_id::type_name)
 					)
-      			end
+				end
+
+				if (uvm_config_db #(uvm_ext_json_tr_logger)::get(
+						this, "", "json_logger", logger)) begin
+					recorder = uvm_ext_json_recorder::type_id::create("recorder");
+					recorder.set_logger(logger);
+				end
 			endfunction
 
 			//Task which drives one single item on the bus
@@ -331,7 +374,7 @@
 
 				void'(begin_tr(item));
 
-				//`uvm_info("DEBUG", $sformatf("Monitor started collecting item: %0s", item.convert2string()), UVM_NONE)
+				`uvm_info("ITEM_END", $sformatf("Monitor started collecting item: %0s", item.convert2string()), UVM_LOW)
 
 				output_port.write(item);
 
@@ -352,9 +395,13 @@
 
 				end_tr(item);
 
+				if (recorder != null) begin
+					recorder.record(item);
+				end
+
 				output_port.write(item);
 
-				`uvm_info("DEBUG", $sformatf("Monitored item: %0s", item.convert2string()), UVM_NONE)
+				`uvm_info("ITEM_END", $sformatf("Monitored item: %0s", item.convert2string()), UVM_LOW)
 			endtask
 
 		endclass
@@ -625,10 +672,25 @@
 
 		typedef virtual cfs_md_if#(DATA_WIDTH) cfs_md_vif;
 
+		uvm_ext_json_recorder  recorder;
+		uvm_ext_json_tr_logger logger;
+
 		`uvm_component_param_utils(cfs_md_driver_master#(DATA_WIDTH))
 
 		function new(string name = "", uvm_component parent);
 		super.new(name, parent);
+		endfunction
+
+		virtual function void end_of_elaboration_phase(uvm_phase phase);
+			super.end_of_elaboration_phase(phase);
+
+			if (agent_config.get_has_recording()) begin
+				if (!uvm_config_db #(uvm_ext_json_tr_logger)::get(
+						this, "", "json_logger", logger))
+					`uvm_fatal("ALGORITHM_ISSUE", "json_logger not found in config_db")
+				recorder = uvm_ext_json_recorder::type_id::create("recorder");
+				recorder.set_logger(logger);
+			end
 		endfunction
 
 		//Task which drives one single item on the bus
@@ -638,7 +700,7 @@
 		
 		int unsigned data_width_in_bytes = DATA_WIDTH / 8;
 
-		`uvm_info("DEBUG", $sformatf("Driving \"%0s\": %0s", item.get_full_name(), item.convert2string()), UVM_NONE)
+		`uvm_info("ITEM_START", $sformatf("Driving \"%0s\": %0s", item.get_full_name(), item.convert2string()), UVM_LOW)
 		
 		if(item.offset + item.data.size() > data_width_in_bytes) begin
 			`uvm_fatal("ALGORITHM_ISSUE", $sformatf("Trying to drive an item with offset %0d and %0d bytes but the width of the data bus, in bytes, is %0d", item.offset, item.data.size(), data_width_in_bytes))
@@ -647,6 +709,8 @@
 		for(int i = 0; i < item.pre_drive_delay; i++) begin
 			@(posedge vif.clk);
 		end
+
+		void'(begin_tr(item));
 
 		vif.valid  <= 1;
 		
@@ -675,7 +739,13 @@
 		vif.data   <= 0;
 		vif.offset <= 0;
 		vif.size   <= 0;
-		
+
+		void'(end_tr(item));
+
+		if (recorder != null) begin
+			recorder.record(item);
+		end
+
 		for(int i = 0; i < item.post_drive_delay; i++) begin
 			@(posedge vif.clk);
 		end
@@ -684,40 +754,51 @@
 		//Function to handle the reset
 		virtual function void handle_reset(uvm_phase phase);
 			cfs_md_vif vif = agent_config.get_vif();
-			
+
 			super.handle_reset(phase);
-			
+
 			vif.valid  <= 0;
 			vif.data   <= 0;
 			vif.offset <= 0;
 			vif.size   <= 0;
-			
+
 		endfunction
 
 	endclass
 
 	class cfs_md_driver_slave#(int unsigned DATA_WIDTH = 32) extends cfs_md_driver#(.DATA_WIDTH(DATA_WIDTH), .ITEM_DRV(cfs_md_item_drv_slave));
-		
+
 		//Pointer to the agent configuration component
 		cfs_md_agent_config_slave#(DATA_WIDTH) agent_config;
 
 		typedef virtual cfs_md_if#(DATA_WIDTH) cfs_md_vif;
+
+		uvm_ext_json_recorder  recorder;
+		uvm_ext_json_tr_logger logger;
 
 		`uvm_component_param_utils(cfs_md_driver_slave#(DATA_WIDTH))
 
 		function new(string name = "", uvm_component parent);
 			super.new(name, parent);
 		endfunction
-		
+
 		virtual function void end_of_elaboration_phase(uvm_phase phase);
 			super.end_of_elaboration_phase(phase);
-			
+
 			if(super.agent_config == null) begin
 				`uvm_fatal("ALGORITHM_ISSUE", $sformatf("At this point the pointer to agent_config from %0s should not be null", get_full_name()))
 			end
-			
+
 			if($cast(agent_config, super.agent_config) == 0) begin
 				`uvm_fatal("ALGORITHM_ISSUE", $sformatf("Could not cast %0s to %0s", super.agent_config.get_full_name(), cfs_md_agent_config_slave#(DATA_WIDTH)::type_id::type_name))
+			end
+
+			if (agent_config.get_has_recording()) begin
+				if (!uvm_config_db #(uvm_ext_json_tr_logger)::get(
+						this, "", "json_logger", logger))
+					`uvm_fatal("ALGORITHM_ISSUE", "json_logger not found in config_db")
+				recorder = uvm_ext_json_recorder::type_id::create("recorder");
+				recorder.set_logger(logger);
 			end
 		endfunction
 
@@ -726,25 +807,33 @@
 		
 			cfs_md_vif vif = agent_config.get_vif();
 			
-			`uvm_info("DEBUG", $sformatf("Driving \"%0s\": %0s", item.get_full_name(), item.convert2string()), UVM_NONE)
+			`uvm_info("ITEM_START", $sformatf("Driving \"%0s\": %0s", item.get_full_name(), item.convert2string()), UVM_LOW)
 			
 			if(vif.valid !== 1) begin
 				`uvm_error("ALGORITHM_ISSUE", $sformatf("Trying to drive a slave item when there is no item started by the master - item: %0s", item.convert2string()))
 			end
 			
+			void'(begin_tr(item));
+
 			vif.ready <= 0;
-			
+
 			for(int i = 0; i < item.length; i++) begin
 				@(posedge vif.clk);
 			end
 
 			vif.ready <= 1;
 			vif.err   <= bit'(item.response);
-			
+
 			@(posedge vif.clk);
-			
+
 			vif.ready <= item.ready_at_end;
 			vif.err   <= 0;
+
+			void'(end_tr(item));
+
+			if (recorder != null) begin
+				recorder.record(item);
+			end
 		endtask
 
 		//Function to handle the reset
