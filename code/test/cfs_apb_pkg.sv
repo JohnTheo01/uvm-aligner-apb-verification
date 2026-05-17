@@ -55,6 +55,15 @@
         return result;
       endfunction
 
+      virtual function void do_record(uvm_recorder recorder);
+        uvm_ext_json_recorder json_recorder;
+        if ($cast(json_recorder, recorder) == 0) begin
+          `uvm_fatal("PRAY", "Pray_more")
+        end
+        json_recorder.json_record_string("dir", dir.name());
+        json_recorder.json_record_field("addr", addr, $bits(addr), UVM_HEX);
+      endfunction
+
     endclass
 
     class cfs_apb_item_drv extends cfs_apb_item_base;
@@ -92,6 +101,20 @@
         return result;
       endfunction
 
+      virtual function void do_record(uvm_recorder recorder);
+        uvm_ext_json_recorder json_recorder;
+        if ($cast(json_recorder, recorder) == 0) begin
+          `uvm_fatal("PRAY", "Pray_more")
+        end
+        super.do_record(recorder);  // ← περνάμε json_rec αντί για recorder
+        json_recorder.json_record_field_int("pre_drive_delay",  pre_drive_delay,
+                                  $bits(pre_drive_delay),  UVM_DEC);
+        json_recorder.json_record_field_int("post_drive_delay", post_drive_delay,
+                                  $bits(post_drive_delay), UVM_DEC);
+        if (dir == CFS_APB_WRITE)
+            json_recorder.json_record_field("data", data, $bits(data), UVM_HEX);
+    endfunction
+
     endclass
 
     class cfs_apb_item_mon extends cfs_apb_item_base;
@@ -110,6 +133,22 @@
       function new(string name = "");
         super.new(name);
       endfunction
+
+      virtual function void do_record(uvm_recorder recorder);
+        uvm_ext_json_recorder json_rec;
+        if ($cast(json_rec, recorder)) begin
+            // dir και addr από super (cfs_apb_item_base)
+            super.do_record(recorder);
+            // data για READ — το WRITE το έχει ήδη το super
+            if (dir == CFS_APB_READ)
+                json_rec.json_record_field("data", data, $bits(data), UVM_HEX);
+            // Monitor-specific fields
+            json_rec.json_record_string("response",           response.name());
+            json_rec.json_record_field_int("length",          length,          $bits(length),          UVM_DEC);
+            json_rec.json_record_field_int("prev_item_delay", prev_item_delay, $bits(prev_item_delay), UVM_DEC);
+        end
+      endfunction
+
 
       virtual function string convert2string();
         string result = super.convert2string();
@@ -153,6 +192,10 @@
 			return stuck_threshold;
 		endfunction
 
+    virtual function bit get_has_recording();
+      return has_recording;  // ← απευθείας το protected field, όχι super
+    endfunction
+
 		//Setter for stuck threshold
 		virtual function void set_stuck_threshold(int unsigned value);
 			if(value <= 2) begin
@@ -189,73 +232,90 @@
     endclass
 
     class cfs_apb_monitor 
-        extends uvm_ext_monitor#(cfs_apb_vif, cfs_apb_item_mon);
+      extends uvm_ext_monitor#(cfs_apb_vif, cfs_apb_item_mon);
 
-        cfs_apb_agent_config agent_config;
+      cfs_apb_agent_config agent_config;
 
-        `uvm_component_utils(cfs_apb_monitor)
+      uvm_ext_json_recorder  recorder;
+      uvm_ext_json_tr_logger logger;
 
-        function new(string name = "", uvm_component parent);
-        	super.new(name, parent);
-        endfunction
+      `uvm_component_utils(cfs_apb_monitor)
 
-        virtual function void end_of_elaboration_phase(uvm_phase phase);
-			super.end_of_elaboration_phase(phase);
+      function new(string name = "", uvm_component parent);
+        super.new(name, parent);
+      endfunction
 
-			if ($cast(agent_config, super.agent_config) == 0) begin
-				`uvm_fatal(
-					"ALGORITHM_ISSUE", 
-					$sformatf(
-						"Could not covert from \"%0s\" to \"%0s\"",
-						super.agent_config.get_type_name(), cfs_apb_agent_config::type_id::type_name)
-				)
-      		end
+      virtual function void end_of_elaboration_phase(uvm_phase phase);
+        super.end_of_elaboration_phase(phase);
 
-		endfunction
+        if ($cast(agent_config, super.agent_config) == 0) begin
+          `uvm_fatal(
+            "ALGORITHM_ISSUE", 
+            $sformatf(
+              "Could not covert from \"%0s\" to \"%0s\"",
+              super.agent_config.get_type_name(), cfs_apb_agent_config::type_id::type_name)
+          )
+        end
 
-        //Task which drives one single item on the bus
-        protected virtual task collect_transaction();
-			cfs_apb_vif vif = agent_config.get_vif();
-			cfs_apb_item_mon item = cfs_apb_item_mon::type_id::create("item");
+        if (uvm_config_db #(uvm_ext_json_tr_logger)::get(
+            this, "", "json_logger", logger)) begin
+            recorder = uvm_ext_json_recorder::type_id::create("recorder");
+            recorder.set_logger(logger);
+        end
 
-			while(vif.psel !== 1) begin
-			@(posedge vif.pclk);
-			item.prev_item_delay++;
-			end
+      endfunction
 
-			item.addr   = vif.paddr;
-			item.dir    = cfs_apb_dir'(vif.pwrite);
-			item.length = 1;
+      //Task which drives one single item on the bus
+      protected virtual task collect_transaction();
+        cfs_apb_vif vif = agent_config.get_vif();
+        cfs_apb_item_mon item = cfs_apb_item_mon::type_id::create("item");
 
-			if(item.dir == CFS_APB_WRITE) begin
-			item.data = vif.pwdata;
-			end
+        while(vif.psel !== 1) begin
+          @(posedge vif.pclk);
+          item.prev_item_delay++;
+        end
 
-			@(posedge vif.pclk);
-			item.length++;
+        void'(begin_tr(item));
 
-			while(vif.pready !== 1) begin
-			@(posedge vif.pclk);
-			item.length++;
+        item.addr   = vif.paddr;
+        item.dir    = cfs_apb_dir'(vif.pwrite);
+        item.length = 1;
 
-			if(agent_config.get_has_checks()) begin
-				if(item.length >= agent_config.get_stuck_threshold()) begin
-				`uvm_error("PROTOCOL_ERROR", $sformatf("The APB transfer reached the stuck threshold value of %0d", item.length))
-				end
-			end
-			end
+        if(item.dir == CFS_APB_WRITE) begin
+          item.data = vif.pwdata;
+        end
 
-			item.response = cfs_apb_response'(vif.pslverr);
+        @(posedge vif.pclk);
+        item.length++;
 
-			if(item.dir == CFS_APB_READ) begin
-			item.data = vif.prdata;
-			end
+        while(vif.pready !== 1) begin
+          @(posedge vif.pclk);
+          item.length++;
 
-			output_port.write(item);
+          if(agent_config.get_has_checks()) begin
+            if(item.length >= agent_config.get_stuck_threshold()) begin
+              `uvm_error("PROTOCOL_ERROR", $sformatf("The APB transfer reached the stuck threshold value of %0d", item.length))
+            end
+          end
+        end
 
-			`uvm_info("DEBUG", $sformatf("Monitored item:: %0s", item.convert2string()), UVM_NONE)
+        item.response = cfs_apb_response'(vif.pslverr);
 
-			@(posedge vif.pclk);
+        if(item.dir == CFS_APB_READ) begin
+          item.data = vif.prdata;
+        end
+
+        void'(end_tr(item));
+
+        if(recorder != null) begin
+          recorder.record(item);
+        end
+
+        output_port.write(item);
+
+        `uvm_info("ITEM_END", $sformatf("Monitored item:: %0s", item.convert2string()), UVM_LOW)
+
+        @(posedge vif.pclk);
       endtask
 
     endclass
@@ -447,6 +507,10 @@
 		//Pointer to agent configuration
 		cfs_apb_agent_config agent_config;
 
+    // For recording
+    uvm_ext_json_recorder  recorder;
+    uvm_ext_json_tr_logger logger;
+
 		`uvm_component_utils(cfs_apb_driver)
 
 		function new(string name = "", uvm_component parent);
@@ -457,11 +521,15 @@
 		protected virtual task drive_transaction(cfs_apb_item_drv item);
 			cfs_apb_vif vif = agent_config.get_vif();
 
-			`uvm_info("DEBUG", $sformatf("Driving \"%0s\": %0s", item.get_full_name(), item.convert2string()), UVM_NONE)
+      `uvm_info("CFS_APB_DRIVER", "drive_transaction called", UVM_NONE)
+
+			`uvm_info("ITEM_START", $sformatf("Driving \"%0s\": %0s", item.get_full_name(), item.convert2string()), UVM_LOW)
 
 			for(int i = 0; i < item.pre_drive_delay; i++) begin
 				@(posedge vif.pclk);
 			end
+
+      void'(begin_tr(item));
 
 			vif.psel   <= 1;
 			vif.pwrite <= bit'(item.dir);
@@ -487,23 +555,36 @@
 			vif.paddr   <= 0;
 			vif.pwdata  <= 0;
 
+      void'(end_tr(item));
+
+      recorder.record(item);
+
 			for(int i = 0; i < item.post_drive_delay; i++) begin
 				@(posedge vif.pclk);
 			end
+
 		endtask
 
-		virtual function void end_of_elaboration_phase(uvm_phase phase);
-			super.end_of_elaboration_phase(phase);
 
-			if ($cast(agent_config, super.agent_config) == 0) begin
-				`uvm_fatal(
-					"ALGORITHM_ISSUE", 
-					$sformatf(
-						"Could not covert from \"%0s\" to \"%0s\"",
-						super.agent_config.get_type_name(), cfs_apb_agent_config::type_id::type_name)
-				)
-      		end
-		endfunction
+    virtual function void end_of_elaboration_phase(uvm_phase phase);
+        uvm_ext_agent_config#(cfs_apb_vif) base_config;
+        super.end_of_elaboration_phase(phase);
+
+        if ($cast(agent_config, super.agent_config) == 0) begin
+            `uvm_fatal("ALGORITHM_ISSUE", "Cast failed")
+        end
+
+        // Cast σε base type για να έχουμε πρόσβαση στο get_has_recording()
+        if ($cast(base_config, agent_config)) begin
+            if (base_config.get_has_recording()) begin
+                recorder = uvm_ext_json_recorder::type_id::create("recorder");
+                if (!uvm_config_db #(uvm_ext_json_tr_logger)::get(
+                    this, "", "json_logger", logger))
+                    `uvm_fatal("CFS_APB_DRIVER", "json_logger not found in config_db")
+                recorder.set_logger(logger);
+            end
+        end
+    endfunction
 
 		//Function to handle the reset
 		virtual function void handle_reset(uvm_phase phase);

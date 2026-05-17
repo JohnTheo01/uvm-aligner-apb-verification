@@ -27,6 +27,12 @@
 		// Predictor Handler
 		cfs_algn_reg_predictor#(cfs_apb_item_mon) predictor;
 
+		// Coverage Handler
+		cfs_algn_coverage coverage;
+
+		// Virtual sequencer Handle
+		cfs_algn_virtual_sequencer virtual_sequencer;
+
 		`uvm_component_param_utils(cfs_algn_env#(ALGN_DATA_WIDTH))
 		
 		function new(string name = "", uvm_component parent);
@@ -41,6 +47,40 @@
 			);
 			env_config.set_has_checks(1);
 			env_config.set_algn_data_width(ALGN_DATA_WIDTH);
+
+
+			begin: Connect_JSON_Loggers
+				// APB driver logger
+				uvm_config_db #(uvm_ext_json_tr_logger)::set(
+					this, "apb_agent.driver", "json_logger",
+					uvm_ext_json_tr_logger::get("apb_drv"));
+
+				// APB monitor logger
+				uvm_config_db #(uvm_ext_json_tr_logger)::set(
+					this, "apb_agent.monitor", "json_logger",
+					uvm_ext_json_tr_logger::get("apb_mon"));
+
+				// MD RX (master) monitor logger
+				uvm_config_db #(uvm_ext_json_tr_logger)::set(
+					this, "md_rx_agent.monitor", "json_logger",
+					uvm_ext_json_tr_logger::get("md_rx_mon"));
+
+				// MD RX (master) driver logger
+				uvm_config_db #(uvm_ext_json_tr_logger)::set(
+					this, "md_rx_agent.driver", "json_logger",
+					uvm_ext_json_tr_logger::get("md_rx_drv"));
+
+				// MD TX (slave) monitor logger
+				uvm_config_db #(uvm_ext_json_tr_logger)::set(
+					this, "md_tx_agent.monitor", "json_logger",
+					uvm_ext_json_tr_logger::get("md_tx_mon"));
+
+				// MD TX (slave) driver logger
+				uvm_config_db #(uvm_ext_json_tr_logger)::set(
+					this, "md_tx_agent.driver", "json_logger",
+					uvm_ext_json_tr_logger::get("md_tx_drv"));
+			end
+
 
 			apb_agent = cfs_apb_agent::type_id::create("apb_agent", this);
 			
@@ -63,6 +103,12 @@
 			);
 
 			scoreboard = cfs_algn_scoreboard::type_id::create("scoreboard", this);
+
+			if (env_config.get_has_coverage()) begin
+				coverage = cfs_algn_coverage::type_id::create("coverage", this);
+			end
+
+			virtual_sequencer = cfs_algn_virtual_sequencer::type_id::create("virtual_sequencer", this);
 		endfunction
 
 		virtual function void connect_phase(uvm_phase phase);
@@ -113,6 +159,19 @@
 
 			end 
 
+			if (env_config.get_has_coverage()) begin: Connect_model_2_Coverage
+				model.port_out_split_info.connect(coverage.port_in_split_info);
+			end
+
+			begin : Connect_Sequencers 
+				virtual_sequencer.apb_sequencer = apb_agent.sequencer;
+
+				virtual_sequencer.md_rx_sequencer = cfs_md_sequencer_base_master'(md_rx_agent.sequencer);
+				virtual_sequencer.md_tx_sequencer = cfs_md_sequencer_base_slave'(md_tx_agent.sequencer);
+
+				virtual_sequencer.model = model;
+			end
+
 
 		endfunction
 
@@ -124,6 +183,15 @@
 			end
 		endtask
 
+		virtual function void handle_reset(uvm_phase phase);
+			model.handle_reset(phase);
+			scoreboard.handle_reset(phase);
+			
+			if (coverage != null) begin
+				coverage.handle_reset(phase);
+			end
+		endfunction
+
 		protected virtual task wait_reset_start();
 			apb_agent.agent_config.wait_reset_start();
 		endtask
@@ -132,10 +200,13 @@
 			apb_agent.agent_config.wait_reset_end();
 		endtask
 
-		virtual function void handle_reset(uvm_phase phase);
-			model.handle_reset(phase);
-			scoreboard.handle_reset(phase);
+
+		function void final_phase(uvm_phase phase);
+			super.final_phase(phase);
+			uvm_ext_json_tr_logger::dump_all_to_log();  // ← τυπώνει στο log
+			uvm_ext_json_tr_logger::close_all();
 		endfunction
+
 		
 	endclass
 
