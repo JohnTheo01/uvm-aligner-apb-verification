@@ -31,6 +31,8 @@
 
             protected bit has_coverage;
 
+            protected bit has_recording;
+
             `uvm_component_param_utils(uvm_ext_agent_config#(VIRTUAL_INTF))
 
             function new(string name = "", uvm_component parent);
@@ -38,6 +40,7 @@
                 active_passive          = UVM_ACTIVE;
                 has_coverage            = 1;
                 has_checks              = 1;
+                has_recording           = 1;
             endfunction
 
             // =================================== GETTERS - SETTERS ===================================
@@ -69,6 +72,15 @@
 
             virtual function bit unsigned get_has_coverage();
                 return this.has_coverage;
+            endfunction
+
+
+            virtual function bit get_has_recording();
+                return this.has_recording;
+            endfunction
+
+            virtual function void set_has_recording(bit value);
+                this.has_recording = value;
             endfunction
 
 
@@ -114,7 +126,7 @@
                     `uvm_fatal("ALGORITHM_ISSUE", "The APB virtual interface is not configured at \"Start of simulation\" phase")
                 end
                 else begin
-                    `uvm_info("UVM_EXT_CONFIG", "The virtual interface is configured at \"Start of simulation\" phase", UVM_DEBUG)
+                    `uvm_info("CONFIG", "The virtual interface is configured at \"Start of simulation\" phase", UVM_FULL)
                 end
             endfunction
 
@@ -309,7 +321,7 @@
                 super.report_phase(phase);
 
                 //IMPORTANT: DON'T DO THIS IN A REAL PROJECT!!!
-                `uvm_info("DEBUG", $sformatf("Coverage: %0s", coverage2string()), UVM_NONE)
+                `uvm_info("COVERAGE", $sformatf("Coverage: %0s", coverage2string()), UVM_DEBUG)
             endfunction
 
         endclass
@@ -534,6 +546,10 @@
             endtask
 
         endclass
+
+        `include "uvm_ext_tr_logger.sv"
+
+        `include "uvm_ext_json_recorder.sv"
 
     endpackage
 
