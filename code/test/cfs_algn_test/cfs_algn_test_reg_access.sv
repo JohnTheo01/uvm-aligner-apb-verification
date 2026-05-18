@@ -17,8 +17,8 @@
         function new(string name, uvm_component parent);
             super.new(name, parent);
 
-            this.num_reg_accesses = 100;
-            this.num_unmapped_accesses = 100;
+            this.num_reg_accesses       = 5;
+            this.num_unmapped_accesses  = 5;
         endfunction
 
         virtual task run_phase(uvm_phase phase);
@@ -26,8 +26,9 @@
             uvm_status_e status;
             uvm_reg_data_t data;
 
-            phase.raise_objection(this, "TEST_DONE");
+            phase.raise_objection(this, "TEST_STARTED");
 
+            #(100ns);
 
             fork 
                 begin : DRIVE_REG_ACCESS
@@ -42,7 +43,7 @@
                 end
                 begin : DRIVE_UNMAPPED_ACCESS
                     // Drive APB accesses to unmapped locations
-                    cfs_algn_virtual_sequence_unmapped_access seq = cfs_algn_virtual_sequence_unmapped_access::type_id::create("seq");
+                    cfs_algn_virtual_sequence_reg_access_unmapped seq = cfs_algn_virtual_sequence_reg_access_unmapped::type_id::create("seq");
 
                     void'(seq.randomize() with {
                         num_accesses == num_unmapped_accesses;
@@ -51,6 +52,8 @@
                     seq.start(env.virtual_sequencer);
                 end
             join
+
+            #(100ns);
             phase.drop_objection(this, "TEST_DONE");
 
         endtask

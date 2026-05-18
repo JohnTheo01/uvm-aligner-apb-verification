@@ -29,6 +29,8 @@
 
     `include "cfs_algn_clr_cnt_drop.sv"
 
+    `include "cfs_algn_split_info.sv"
+    `include "cfs_algn_coverage.sv"
 
     `include "cfs_algn_reg_predictor.sv"
 
@@ -36,6 +38,12 @@
 
     `include "cfs_algn_scoreboard.sv"
 
+    `include "cfs_algn_virtual_sequencer.sv"
+
+    `include "cfs_algn_virtual_sequence_base.sv"
+    `include "cfs_algn_virtual_sequence_slow_pace.sv"
+    `include "cfs_algn_virtual_sequence_reg_access_random.sv"
+    `include "cfs_algn_virtual_sequence_reg_access_unmapped.sv"
 
     `include "cfs_algn_env.sv"
 
