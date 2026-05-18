@@ -8,6 +8,7 @@
         protected cfs_algn_vif vif;
 
         local bit has_checks;
+        local bit has_coverage;
 
         local int unsigned algn_data_width;
 
@@ -21,6 +22,7 @@
             super.new(name, parent);
 
             has_checks                  = 1;
+            has_coverage                = 1;
             algn_data_width             = 8;
 
             exp_rx_response_threshold   = 10;
@@ -35,7 +37,7 @@
             if (this.vif == null) begin
                 `uvm_fatal("ALGORITHM_ISSUE", "Virtual Interface has not been instantiated in \"start_of_simulation_phase\" phase")
             end else begin
-                `uvm_info("DEBUG", "Virtual Interface has been instantiated in \"start_of_simulation_phase\" phase", UVM_DEBUG)
+                `uvm_info("CONFIG", "Virtual Interface has been instantiated in \"start_of_simulation_phase\" phase", UVM_FULL)
             end
 
         endfunction
@@ -75,6 +77,15 @@
 
         virtual function cfs_algn_vif get_vif();
             return this.vif;
+        endfunction
+
+        // ----------------------------------- has_coverage -----------------------------------
+        virtual function bit get_has_coverage();
+            return this.has_coverage;
+        endfunction
+
+        virtual function void set_has_coverage(bit value);
+            this.has_coverage = value;
         endfunction
 
       
