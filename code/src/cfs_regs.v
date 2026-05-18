@@ -172,11 +172,11 @@
         ctrl_offset <= 0;
         ctrl_size   <= 1;
         
-        irqen_rx_fifo_empty <= 1;
-        irqen_rx_fifo_full  <= 1;
-        irqen_tx_fifo_empty <= 1;
-        irqen_tx_fifo_full  <= 1;
-        irqen_max_drop      <= 1;
+        irqen_rx_fifo_empty <= 0;
+        irqen_rx_fifo_full  <= 0;
+        irqen_tx_fifo_empty <= 0;
+        irqen_tx_fifo_full  <= 0;
+        irqen_max_drop      <= 0;
         
         irq_rx_fifo_empty <= 0;
         irq_rx_fifo_full  <= 0;
