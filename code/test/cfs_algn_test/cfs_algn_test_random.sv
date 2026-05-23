@@ -32,41 +32,43 @@
 
             // Write random values to all registers
             repeat(2) begin
-                begin: WRITE_TO_REGISTERS
-                    cfs_algn_virtual_sequence_reg_config seq = cfs_algn_virtual_sequence_reg_config::type_id::create("seq");
+                if (env.env_config.model.is_empty() == 1) begin
+                    begin: WRITE_TO_REGISTERS
+                        cfs_algn_virtual_sequence_reg_config seq = cfs_algn_virtual_sequence_reg_config::type_id::create("seq");
 
-                    void'(seq.randomize());
+                        void'(seq.randomize());
 
-                    seq.start(env.virtual_sequencer);
-                end
-           
-                // Drive random traffic
-                repeat(this.num_random_transactions) begin : DRIVE_RX_TRANSACTIONS
-                    cfs_algn_virtual_sequence_rx seq = cfs_algn_virtual_sequence_rx::type_id::create("seq");
-
-                    seq.set_sequencer(env.virtual_sequencer);
-
-                    void'(seq.randomize());
-
-                    seq.start(env.virtual_sequencer);
-                end
-
-                // We wait for data to be handled from rtl so that status registers don't change
-                begin : WAIT_RTL_TO_FINISH_WITH_DATA
-                    cfs_algn_vif vif = env.env_config.get_vif();
-
-                    repeat(100) begin
-                        @(posedge vif.clk);
+                        seq.start(env.virtual_sequencer);
                     end
                 end
+            
+                    // Drive random traffic
+                    repeat(this.num_random_transactions) begin : DRIVE_RX_TRANSACTIONS
+                        cfs_algn_virtual_sequence_rx seq = cfs_algn_virtual_sequence_rx::type_id::create("seq");
 
-                // Read status register
-                begin: READ_STATUS_REG 
-                    cfs_algn_virtual_sequence_reg_status seq = cfs_algn_virtual_sequence_reg_status::type_id::create("seq");
+                        seq.set_sequencer(env.virtual_sequencer);
 
-                    void'(seq.randomize());
+                        void'(seq.randomize());
 
-                    seq.start(env.virtual_sequencer);
+                        seq.start(env.virtual_sequencer);
+                    end
+
+                    // We wait for data to be handled from rtl so that status registers don't change
+                    begin : WAIT_RTL_TO_FINISH_WITH_DATA
+                        cfs_algn_vif vif = env.env_config.get_vif();
+
+                        repeat(100) begin
+                            @(posedge vif.clk);
+                        end
+                    end
+
+                    // Read status register
+                    begin: READ_STATUS_REG 
+                        cfs_algn_virtual_sequence_reg_status seq = cfs_algn_virtual_sequence_reg_status::type_id::create("seq");
+
+                        void'(seq.randomize());
+
+                        seq.start(env.virtual_sequencer);
                 end
                 
             end

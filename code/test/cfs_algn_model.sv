@@ -77,6 +77,22 @@
             exp_irq = 0;
         endfunction
 
+        virtual function bit is_empty();
+            if (rx_fifo.used() != 0) begin
+                return 0;
+            end
+
+            if (tx_fifo.used() != 0) begin
+                return 0;
+            end
+
+            if (buffer.size() != 0) begin
+                return 0;
+            end
+
+            return 1;
+        endfunction
+
         virtual function void build_phase(uvm_phase phase);
             super.build_phase(phase);
 
