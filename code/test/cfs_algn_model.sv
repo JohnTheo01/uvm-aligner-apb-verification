@@ -26,6 +26,9 @@
         // Intertupt request port
         uvm_analysis_port#(bit) port_out_irq;
 
+        // Output port to coverage
+        uvm_analysis_port#(cfs_algn_split_info) port_out_split_info;
+
         // Rx FIFO handler
         protected uvm_tlm_fifo#(cfs_md_item_mon) rx_fifo;
         local process process_push_to_rx_fifo;
@@ -69,6 +72,8 @@
 
             port_out_irq = new("port_out_irq", this);
 
+            port_out_split_info = new("port_out_split_info", this);
+
             rx_fifo = new("rx_fifo", this, 8);
             tx_fifo = new("tx_fifo", this, 8);
 
@@ -76,8 +81,8 @@
 
             exp_irq = 0;
         endfunction
-
-        virtual function bit is_empty();
+      
+      	 virtual function bit is_empty();
             if (rx_fifo.used() != 0) begin
                 return 0;
             end
@@ -218,12 +223,12 @@
             
             void'(reg_block.IRQ.MAX_DROP.predict(1));
 
-            `uvm_info("DEBUG", $sformatf(
+            `uvm_info("CNT_DROP", $sformatf(
                 "Drop counter reached max value - %0s: %0d",
                 reg_block.IRQEN.MAX_DROP.get_full_name(), 
                 reg_block.STATUS.CNT_DROP.get_mirrored_value()
                 ),
-                UVM_NONE
+                UVM_MEDIUM
             )
 
             if (reg_block.IRQEN.MAX_DROP.get_mirrored_value() == 1) begin
@@ -246,13 +251,13 @@
 
                     void'(reg_block.STATUS.CNT_DROP.predict(current_value + 1));
 
-                    `uvm_info("DEBUG", 
+                    `uvm_info("CNT_DROP", 
                         $sformatf(
                             "Increment - %0s: %0d due to %0s",
                             reg_block.STATUS.CNT_DROP.get_full_name(),
                             reg_block.STATUS.CNT_DROP.get_mirrored_value(),
                             response.name()),
-                        UVM_NONE
+                        UVM_LOW
 
                     )
                 end
@@ -318,12 +323,12 @@
 
                      void'(reg_block.IRQ.RX_FIFO_FULL.predict(1));
 
-                `uvm_info("DEBUG", $sformatf(
+                `uvm_info("RX_FIFO", $sformatf(
                     "RX FIFO is full - %0s: %0d",
                     reg_block.IRQEN.RX_FIFO_FULL.get_full_name(), 
-                    reg_block.STATUS.RX_LVL.get_mirrored_value()
+                    reg_block.IRQEN.RX_FIFO_FULL.get_mirrored_value()
                     ),
-                    UVM_NONE
+                    UVM_MEDIUM
                 )
 
                 if (reg_block.IRQEN.RX_FIFO_FULL.get_mirrored_value() == 1) begin
@@ -353,11 +358,11 @@
 
             inc_rx_lvl();
 
-            `uvm_info("DEBUG", $sformatf(
+            `uvm_info("RX_FIFO", $sformatf(
                 "Rx Fifo push - new_level: %d, pushed_entry: %0s",
                 reg_block.STATUS.RX_LVL.get_mirrored_value(),
                 item_mon.convert2string()),
-                UVM_NONE 
+                UVM_LOW
             )
 
             port_out_rx.write(CFS_MD_OKAY);
@@ -432,12 +437,12 @@
 
                     void'(reg_block.IRQ.RX_FIFO_EMPTY.predict(1));
 
-                    `uvm_info("DEBUG", $sformatf(
+                    `uvm_info("RX_FIFO", $sformatf(
                         "RX FIFO is empty - %0s: %0d",
                         reg_block.IRQEN.RX_FIFO_EMPTY.get_full_name(), 
                         reg_block.IRQEN.RX_FIFO_EMPTY.get_mirrored_value()
                         ),
-                        UVM_NONE
+                        UVM_MEDIUM
                     )
 
                     if (reg_block.IRQEN.RX_FIFO_EMPTY.get_mirrored_value() == 1) begin
@@ -469,11 +474,11 @@
 
             dec_rx_lvl();
 
-            `uvm_info("DEBUG", $sformatf(
+            `uvm_info("RX_FIFO", $sformatf(
                 "Rx Fifo pop - new_level: %d, popped_entry: %0s",
                 reg_block.STATUS.RX_LVL.get_mirrored_value(),
                 item.convert2string()),
-                UVM_NONE 
+                UVM_LOW 
             )
         endtask
 
@@ -562,12 +567,12 @@
 
                      void'(reg_block.IRQ.TX_FIFO_FULL.predict(1));
 
-                    `uvm_info("DEBUG", $sformatf(
+                    `uvm_info("TX_FIFO", $sformatf(
                         "TX FIFO is FULL - %0s: %0d",
                         reg_block.IRQEN.TX_FIFO_FULL.get_full_name(), 
-                        reg_block.STATUS.TX_LVL.get_mirrored_value()
+                        reg_block.IRQEN.TX_FIFO_FULL.get_mirrored_value()
                         ),
-                        UVM_NONE
+                        UVM_MEDIUM
                     )
 
                     if (reg_block.IRQEN.TX_FIFO_FULL.get_mirrored_value() == 1) begin
@@ -598,11 +603,11 @@
 
             inc_tx_lvl();
 
-            `uvm_info("DEBUG", $sformatf(
+            `uvm_info("TX_FIFO", $sformatf(
                 "Tx Fifo push - new_level: %d, pushed_entry: %0s",
                 reg_block.STATUS.TX_LVL.get_mirrored_value(),
                 item.convert2string()),
-                UVM_NONE 
+                UVM_LOW 
             )
         endtask
 
@@ -677,7 +682,7 @@
                                     tx_item.data.push_back(buffer_item.data[idx]);
                                 end
                             
-                            end else begin
+                            end else begin: Split_items
                                 cfs_md_item_mon items[$];
                                 int unsigned num_bytes = ctrl_size - tx_item.data.size();
                                 
@@ -688,6 +693,18 @@
                                 end
 
                                 this.buffer.push_front(items[1]);
+
+                                begin: Send_to_coverage
+                                    cfs_algn_split_info info = cfs_algn_split_info::type_id::create("info");
+
+                                    info.ctrl_offset        = ctrl_offset;
+                                    info.ctrl_size          = ctrl_size;
+                                    info.md_offset          = buffer_item.offset;
+                                    info.md_size            = buffer_item.data.size();
+                                    info.num_bytes_needed   = num_bytes;
+
+                                    port_out_split_info.write(info);
+                                end
                             end
                         end
 
@@ -777,12 +794,12 @@
 
                     void'(reg_block.IRQ.TX_FIFO_EMPTY.predict(1));
 
-                    `uvm_info("DEBUG", $sformatf(
+                    `uvm_info("TX_FIFO", $sformatf(
                         "TX FIFO is EMPTY - %0s: %0d",
                         reg_block.IRQEN.TX_FIFO_EMPTY.get_full_name(), 
-                        reg_block.STATUS.TX_LVL.get_mirrored_value()
+                        reg_block.IRQEN.TX_FIFO_EMPTY.get_mirrored_value()
                         ),
-                        UVM_NONE
+                        UVM_MEDIUM
                     )
 
                     if (reg_block.IRQEN.TX_FIFO_EMPTY.get_mirrored_value() == 1) begin
@@ -813,11 +830,11 @@
 
             dec_tx_lvl();
 
-            `uvm_info("DEBUG", $sformatf(
+            `uvm_info("TX_FIFO", $sformatf(
                 "Tx Fifo pop - new_level: %d, popped_entry: %0s",
                 reg_block.STATUS.TX_LVL.get_mirrored_value(),
                 item.convert2string()),
-                UVM_NONE 
+                UVM_LOW 
             )
         endtask
 
