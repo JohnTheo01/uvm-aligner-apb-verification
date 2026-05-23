@@ -32,7 +32,7 @@
 
             // Write random values to all registers
             repeat(2) begin
-                if (env.env_config.model.is_empty() == 1) begin
+                if (env.model.is_empty() == 1) begin
                     begin: WRITE_TO_REGISTERS
                         cfs_algn_virtual_sequence_reg_config seq = cfs_algn_virtual_sequence_reg_config::type_id::create("seq");
 
