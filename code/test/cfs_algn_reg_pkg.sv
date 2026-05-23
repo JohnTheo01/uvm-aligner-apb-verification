@@ -335,6 +335,17 @@
 
                 // <<UVM_CONFIGURE_BLOCKS>>
 
+                /* 
+                    We redeclare this cause uvm sets the value to 0
+                    due to the "W1C" access right even though we set is_rand(1)
+                    in configure function.
+                */ 
+                RX_FIFO_EMPTY.value.rand_mode(1);
+                RX_FIFO_FULL.value.rand_mode(1);
+                TX_FIFO_EMPTY.value.rand_mode(1);
+                TX_FIFO_FULL.value.rand_mode(1);
+                MAX_DROP.value.rand_mode(1);
+
             endfunction
         endclass
 
