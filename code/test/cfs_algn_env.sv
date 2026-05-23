@@ -203,7 +203,7 @@
 
 		function void final_phase(uvm_phase phase);
 			super.final_phase(phase);
-			uvm_ext_json_tr_logger::dump_all_to_log();  // ← τυπώνει στο log
+// 			uvm_ext_json_tr_logger::dump_all_to_log();  // ← τυπώνει στο log
 			uvm_ext_json_tr_logger::close_all();
 		endfunction
 
