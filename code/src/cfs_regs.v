@@ -165,7 +165,8 @@
       (edge_rx_fifo_empty & irqen_rx_fifo_empty) | 
       (edge_rx_fifo_full  & irqen_rx_fifo_full)  | 
       (edge_tx_fifo_empty & irqen_tx_fifo_empty) | 
-      (edge_tx_fifo_full  & irqen_tx_fifo_full);
+      (edge_tx_fifo_full  & irqen_tx_fifo_full)  |
+      (edge_max_drop      & irqen_max_drop);
     
     always@(posedge pclk or negedge presetn) begin
       if(presetn == 0) begin
