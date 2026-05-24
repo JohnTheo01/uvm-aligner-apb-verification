@@ -1,4 +1,4 @@
-# Project Progression
+# uvm-aligner-apb-verification
 
 UVM-based verification environment for the CFS Aligner DUT with APB register interface.
 
