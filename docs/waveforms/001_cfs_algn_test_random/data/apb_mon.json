@@ -1,0 +1,75 @@
+[
+  {
+    "type": "cfs_apb_item_mon",
+    "begin_time": 155,
+    "end_time": 175,
+    "dir": "CFS_APB_WRITE",
+    "addr": "0xf0",
+    "response": "CFS_APB_OKAY",
+    "length": 3,
+    "prev_item_delay": 12
+  },
+  {
+    "type": "cfs_apb_item_mon",
+    "begin_time": 225,
+    "end_time": 245,
+    "dir": "CFS_APB_READ",
+    "addr": "0xfe02",
+    "data": "0x0",
+    "response": "CFS_APB_ERR",
+    "length": 3,
+    "prev_item_delay": 4
+  },
+  {
+    "type": "cfs_apb_item_mon",
+    "begin_time": 315,
+    "end_time": 335,
+    "dir": "CFS_APB_WRITE",
+    "addr": "0x848e",
+    "response": "CFS_APB_ERR",
+    "length": 3,
+    "prev_item_delay": 6
+  },
+  {
+    "type": "cfs_apb_item_mon",
+    "begin_time": 435,
+    "end_time": 455,
+    "dir": "CFS_APB_READ",
+    "addr": "0xa59f",
+    "data": "0x0",
+    "response": "CFS_APB_ERR",
+    "length": 3,
+    "prev_item_delay": 9
+  },
+  {
+    "type": "cfs_apb_item_mon",
+    "begin_time": 525,
+    "end_time": 545,
+    "dir": "CFS_APB_WRITE",
+    "addr": "0x5797",
+    "response": "CFS_APB_ERR",
+    "length": 3,
+    "prev_item_delay": 6
+  },
+  {
+    "type": "cfs_apb_item_mon",
+    "begin_time": 575,
+    "end_time": 595,
+    "dir": "CFS_APB_READ",
+    "addr": "0x3773",
+    "data": "0x0",
+    "response": "CFS_APB_ERR",
+    "length": 3,
+    "prev_item_delay": 2
+  },
+  {
+    "type": "cfs_apb_item_mon",
+    "begin_time": 625,
+    "end_time": 645,
+    "dir": "CFS_APB_WRITE",
+    "addr": "0x0",
+    "response": "CFS_APB_OKAY",
+    "length": 3,
+    "prev_item_delay": 2
+  }
+]

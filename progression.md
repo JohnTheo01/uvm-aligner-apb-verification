@@ -1,4 +1,4 @@
-# Project Progression
+# uvm-aligner-apb-verification
 
 UVM-based verification environment for the CFS Aligner DUT with APB register interface.
 
@@ -44,3 +44,46 @@ UVM-based verification environment for the CFS Aligner DUT with APB register int
 - Built the supporting infrastructure for register access: env config, register predictor, APB adapter, and register configuration sequence
 - Wired the register model into the environment alongside reset handling support
 - Fixed several bugs in the register definitions (CTRL constraints, IRQ access type, IRQEN field name)
+- **Bug #001**: Discovered illegal offset/size RTL bug (offset + size > bus width not rejected); fixed in both RTL and predictor; added CTRL register constraint
+
+## Phase 7 — Functional Model (May 4–5, 2026)
+
+- Added CLR callback to reset `CNT_DROP` field via the register model; exercised in register access test
+- Refactored `cfs_algn_reg_pkg` into a single file and inlined APB adapter for EDA Playground compatibility
+- Added analysis ports to model and connected MD monitor outputs in environment
+- Added illegal access detection logic to model RX handler
+- Built RX FIFO model with level tracking, full interrupt support, and buffer build logic
+- Added clock interface for model use; wired through testbench, env, and env_config
+
+## Phase 8 — Align Logic + TX Controller (May 6, 2026)
+
+- Added align logic to model: TX FIFO, split function, and non-blocking align task
+- Added TX controller: tx_complete event, TX FIFO pop, and TX empty interrupt logic
+- Updated random test CTRL values and data sizes to exercise align logic
+
+## Phase 9 — Scoreboard (May 8–10, 2026)
+
+- Added scoreboard infrastructure and wired it to model and agents in environment
+- Implemented RX response checking with watchdog timer and TX item checking
+- Added IRQ checking infrastructure across scoreboard, env_config, interface, and testbench
+- **Bug #002**: Discovered and fixed false IRQ on simultaneous FIFO push/pull; deferred level interrupt prediction to avoid race condition
+
+## Phase 10 — IRQ Refinement + JSON Recording (May 11–17, 2026)
+
+- Consolidated IRQ prediction through `exp_irq` flag and negedge-clocked send task
+- Added FIFO push/pop sync signals and RTL synchronization tasks to model
+- Added JSON transaction recording infrastructure to `uvm_ext_pkg`; wired into APB and MD agents
+- Switched random test to use virtual sequencer
+- First waveform results documented for `cfs_algn_test_random`
+
+## Phase 11 — Virtual Sequences + Coverage + Bug Fixes (May 17–23, 2026)
+
+- Added virtual sequencer, virtual sequences (`slow_pace`, `reg_access_random`, `reg_access_unmapped`), coverage, and `cfs_algn_split_info` type
+- Reorganized all virtual sequences into `cfs_algn_virtual_sequences/` folder
+- Added `reg_config`, `reg_status`, and `rx` virtual sequences; refactored random test to use them
+- **Bug #003**: Discovered and fixed IRQEN register reset values initialized to 1 instead of 0 (RTL)
+- Fixed `rand_mode` for W1C IRQ register fields disabled by UVM after `configure()`
+- **Bug #004**: Discovered and fixed register reconfiguration while model buffers were not empty; added `is_empty()` to model and guarded `WRITE_TO_REGISTERS` block
+- Synchronized model with EDA Playground version: added `port_out_split_info` analysis port, renamed `uvm_info` tags, refined verbosity levels
+- Added `cfs_algn_test_random_rx_err` test: forces illegal RX offset/size combinations via factory override of `rx` virtual sequence
+- **Bug #005**: Discovered and fixed missing IRQ condition for max drop counter in RTL (`edge_max_drop & irqen_max_drop` term absent from IRQ assignment)

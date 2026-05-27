@@ -45,6 +45,11 @@
     `include "cfs_algn_virtual_sequence_reg_access_random.sv"
     `include "cfs_algn_virtual_sequence_reg_access_unmapped.sv"
 
+    `include "cfs_algn_virtual_sequence_reg_config.sv"
+    `include "cfs_algn_virtual_sequence_reg_status.sv"
+    `include "cfs_algn_virtual_sequence_rx.sv"
+    `include "cfs_algn_virtual_sequence_rx_err.sv"
+
     `include "cfs_algn_env.sv"
 
     `include "cfs_algn_seq_reg_config.sv"

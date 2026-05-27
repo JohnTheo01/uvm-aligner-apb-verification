@@ -5,10 +5,14 @@
     class cfs_algn_test_random 
         extends cfs_algn_test_base;
 
+        protected int unsigned num_random_transactions;
+
         `uvm_component_utils(cfs_algn_test_random)
 
         function new(string name, uvm_component parent);
             super.new(name, parent);
+
+            this.num_random_transactions = 100;
         endfunction
 
         virtual task run_phase(uvm_phase phase);
@@ -18,55 +22,58 @@
         
             #(100ns);
 
-            // fork
-            //     begin
-            //         cfs_md_sequence_slave_response_forever seq_response_forever = 
-            //             cfs_md_sequence_slave_response_forever::type_id::create("seq_response_forever");
-                    
-            //         seq_response_forever.start(env.md_tx_agent.sequencer);
-            //     end
-            // join_none
+            fork 
+                begin
+                    cfs_md_sequence_slave_response_forever seq = cfs_md_sequence_slave_response_forever::type_id::create("seq");
 
-            env.model.reg_block.IRQEN.write(status, 5'b11111);
+                    seq.start(env.md_tx_agent.sequencer);
+                end 
+            join_none
 
-             // 5 APB transactions για testing του recorder
-            repeat(5) begin
-                cfs_apb_sequence_simple seq;
-                seq = cfs_apb_sequence_simple::type_id::create("seq");
-                void'(seq.randomize());
-                seq.start(env.apb_agent.sequencer);
-            end
+            // Write random values to all registers
+            repeat(2) begin
+                if (env.model.is_empty() == 1) begin
+                    begin: WRITE_TO_REGISTERS
+                        cfs_algn_virtual_sequence_reg_config seq = cfs_algn_virtual_sequence_reg_config::type_id::create("seq");
 
-            void'(env.model.reg_block.CTRL.randomize() with{
-                SIZE.value == 2;
-                OFFSET.value == 0;
-            });
-            env.model.reg_block.CTRL.update(status);
+                        void'(seq.randomize());
 
-           
-
-          
-            repeat(8) begin 
-                // cfs_md_sequence_simple_master seq_simple = cfs_md_sequence_simple_master::type_id::create("seq_simple");
-
-                // seq_simple.set_sequencer(env.md_rx_agent.sequencer);
-                
-                // void'(seq_simple.randomize());
-
-                // seq_simple.start(env.md_rx_agent.sequencer);
-
-                cfs_algn_virtual_sequence_slow_pace vseq_slow_pace;
-                vseq_slow_pace = cfs_algn_virtual_sequence_slow_pace::type_id::create("vseq_slow_pace");
-
-                vseq_slow_pace.set_sequencer(env.virtual_sequencer);
-
-                void'(vseq_slow_pace.randomize());
-
-                vseq_slow_pace.start(env.virtual_sequencer);
-
-            end
+                        seq.start(env.virtual_sequencer);
+                    end
+                end
             
-            #(500ns);
+                    // Drive random traffic
+                    repeat(this.num_random_transactions) begin : DRIVE_RX_TRANSACTIONS
+                        cfs_algn_virtual_sequence_rx seq = cfs_algn_virtual_sequence_rx::type_id::create("seq");
+
+                        seq.set_sequencer(env.virtual_sequencer);
+
+                        void'(seq.randomize());
+
+                        seq.start(env.virtual_sequencer);
+                    end
+
+                    // We wait for data to be handled from rtl so that status registers don't change
+                    begin : WAIT_RTL_TO_FINISH_WITH_DATA
+                        cfs_algn_vif vif = env.env_config.get_vif();
+
+                        repeat(100) begin
+                            @(posedge vif.clk);
+                        end
+                    end
+
+                    // Read status register
+                    begin: READ_STATUS_REG 
+                        cfs_algn_virtual_sequence_reg_status seq = cfs_algn_virtual_sequence_reg_status::type_id::create("seq");
+
+                        void'(seq.randomize());
+
+                        seq.start(env.virtual_sequencer);
+                end
+                
+            end
+
+            #(100ns);
 
             phase.drop_objection(this, "TEST_DONE");
 
