@@ -24,22 +24,22 @@ scoreboard, functional coverage, and constrained random testing.
 ```
 uvm-aligner-apb-verification/
 ├── code/
-│   ├── src/                                # RTL source files (DUT)
-│   └── test/                               # UVM verification environment
-│       ├── cfs_apb_pkg.sv                  # APB protocol agent
-│       ├── cfs_md_pkg.sv                   # MD protocol agent
-│       ├── uvm_ext_pkg.sv                  # Reusable UVM base layer
-│       ├── cfs_algn_pkg.sv                 # Top-level environment package
-│       ├── cfs_algn_virtual_sequences/     # Virtual sequencer & sequences
-│       ├── cfs_algn_test/                  # Test classes
-│       └── archive/                        # Unpacked component files (reference)
+│   ├── src/                  # RTL source files (DUT)
+│   └── test/                 # UVM verification environment
+│       ├── cfs_apb_pkg.sv    # APB protocol agent
+│       ├── cfs_md_pkg.sv     # MD protocol agent
+│       ├── uvm_ext_pkg.sv    # Reusable UVM base layer
+│       ├── cfs_algn_pkg.sv   # Top-level environment package
+│       ├── cfs_algn_virtual_sequences/  # Virtual sequencer & sequences
+│       ├── cfs_algn_test/    # Test classes
+│       └── archive/          # Unpacked component files (reference)
 ├── docs/
-│   ├── bugs/                               # Bug reports (#001–#005)
-│   └── waveforms/                          # Simulation waveforms & transaction data
-├── scripts/                                # Python utilities
-│   ├── gen_uvm_reg.py                      # UVM register class generator
-│   ├── add_uvm_field.py                    # UVM register field insertion tool
-│   └── sv_include_guard.py                 # Include guard generator
+│   ├── bugs/                 # Bug reports (#001–#005)
+│   └── waveforms/            # Simulation waveforms & transaction data
+├── scripts/                  # Python utilities
+│   ├── gen_uvm_reg.py        # UVM register class generator
+│   ├── add_uvm_field.py      # UVM register field insertion tool
+│   └── sv_include_guard.py   # Include guard generator
 ├── aligner_datasheet_v_1_0.pdf
 └── PROGRESS.md
 ```
@@ -154,9 +154,19 @@ Transaction recordings captured using [uvm-json-wave-viewer](https://github.com/
 - UVM 1.2
 
 ### Running a Test
-1. Open the project on [EDA Playground](#)
-2. Select **Cadence Xcelium** as the simulator
-3. Enable **"Download files after run"** to retrieve JSON transaction files
+
+> **Note**: The RTL may still contain undiscovered bugs. If the simulation
+> fails unexpectedly, re-running it is usually sufficient.
+
+| Test | EDA Playground |
+|---|---|
+| `cfs_algn_test_reg_access` | [▶ Run](https://edaplayground.com/x/hgUq) |
+| `cfs_algn_test_random` | [▶ Run](https://edaplayground.com/x/w7Ph) |
+| `cfs_algn_test_random_rx_err` | [▶ Run](https://edaplayground.com/x/pg8W) |
+
+1. Open the desired test via the link above
+2. Select **Cadence Xcelium** as the simulator and **UVM 1.2**
+3. Click **"Show output SVG file"** after the simulation to view the interactive waveform, or enable **"Download files after run"** to use the local viewer
 4. Run the simulation
 
 ### Visualizing Transactions
