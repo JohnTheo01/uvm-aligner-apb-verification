@@ -120,9 +120,9 @@ and outputs the aligned data over an MD TX interface.
 |---|---|---|
 | [#001](docs/bugs/bug_001_offset_size_violation.md) | RTL | Illegal offset/size combination not rejected |
 | [#002](docs/bugs/bug_002_fifo_level_interrupt_modeling.md) | Verification Model | False IRQ on simultaneous FIFO push/pull |
-| [#003](docs/bugs/bug_003_model_pipeline_timing_mismatch.md) | Verification Model | Model pipeline runs faster than RTL |
-| [#004](docs/bugs/bug_004_register_reconfiguration.md) | Verification Model | Register reconfiguration with non-empty buffers |
-| [#005](docs/bugs/bug_005_max_drop_counter_irq.md) | RTL | Missing IRQ condition for max drop counter |
+| [#003](docs/bugs/bug_003_irqen_wrong_reset_value.md) | Verification Model | Model pipeline runs faster than RTL |
+| [#004](docs/bugs/bug_004_reconfiguration_of_params_with_data.md) | Verification Model | Register reconfiguration with non-empty buffers |
+| [#005](docs/bugs/bug_005_irq_not_triggered_at_max_drop.md) | RTL | Missing IRQ condition for max drop counter |
 
 ---
 
@@ -132,7 +132,7 @@ Transaction recordings captured using [uvm-json-wave-viewer](https://github.com/
 
 | ID | Test | Description |
 |---|---|---|
-| [001](docs/waveforms/001_test_random/) | `cfs_algn_test_random` | APB and MD transaction recording — first waveform capture |
+| [001](docs/waveforms/001_cfs_algn_test_random/) | `cfs_algn_test_random` | APB and MD transaction recording — first waveform capture |
 
 ---
 
@@ -143,6 +143,14 @@ Transaction recordings captured using [uvm-json-wave-viewer](https://github.com/
 | `gen_uvm_reg.py` | Generates a UVM register class template from the command line |
 | `add_uvm_field.py` | Inserts a new field into an existing UVM register file |
 | `sv_include_guard.py` | Automatically adds `ifndef`/`define`/`endif` include guards to SystemVerilog files based on the filename |
+
+---
+
+## Verification Floorplan
+
+The verification plan tracks coverage goals, test requirements and sign-off criteria for the CFS Aligner DUT.
+
+> **Note**: EDA Playground does not currently support coverage database viewing, floorplan visualization, or regression runs for coverage closure. A solution for in-browser coverage visualization (similar to [uvm-json-wave-viewer](https://github.com/JohnTheo01/uvm-json-wave-viewer)) is under development.
 
 ---
 
